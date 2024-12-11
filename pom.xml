@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.apache.nifi</groupId>
+        <artifactId>nifi-extension-bundles</artifactId>
+        <version>2.0.0-M4</version>
+    </parent>
+
+    <groupId>org.example</groupId>
+    <artifactId>nifi_store_scp_proc</artifactId>
+    <version>1.0-TEST</version>
+    <packaging>pom</packaging>
+
+    <modules>
+        <module>nifi-store-scp-processors</module>
+        <module>nifi-store-scp-nar</module>
+    </modules>
+
+</project>
