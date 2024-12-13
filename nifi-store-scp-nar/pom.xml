@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>org.example</groupId>
+        <groupId>org.rra.processors.storescp</groupId>
         <artifactId>nifi_store_scp_proc</artifactId>
         <version>1.0-TEST</version>
     </parent>
@@ -11,10 +11,12 @@
     <artifactId>nifi-store-scp-nar</artifactId>
     <version>1.0-TEST</version>
     <packaging>nar</packaging>
-
+    <properties>
+        <dcm4che.version>5.33.1</dcm4che.version>
+    </properties>
     <dependencies>
         <dependency>
-            <groupId>org.example</groupId>
+            <groupId>org.rra.processors.storescp</groupId>
             <artifactId>nifi-store-scp-processors</artifactId>
             <version>1.0-TEST</version>
         </dependency>
@@ -24,6 +26,21 @@
             <version>2.0.0-M4</version>
             <type>nar</type>
         </dependency>
+        <dependency>
+            <groupId>org.weasis.core</groupId>
+            <artifactId>weasis-core-img</artifactId>
+            <version>4.9.0.1</version>
+        </dependency>
     </dependencies>
-
+    <repositories>
+        <repository>
+            <id>dcm4che-org</id>
+            <name>Dcm4che Toolkit</name>
+            <url>https://www.dcm4che.org/maven2/</url>
+        </repository>
+        <repository>
+            <id>nroduit-mvn-repo-master</id>
+            <url>https://raw.github.com/nroduit/mvn-repo/master/</url>
+        </repository>
+    </repositories>
 </project>

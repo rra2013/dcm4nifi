@@ -4,6 +4,9 @@ import org.apache.nifi.util.TestRunner;
 import org.apache.nifi.util.TestRunners;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.rra.processors.storescp.dcm.StoreScp;
+
+import java.util.HashMap;
 
 public class StoreScpProcessorTest {
 
@@ -16,6 +19,7 @@ public class StoreScpProcessorTest {
 
     @Test
     public void testProcessor() {
+        testRunner.enqueue("TEST");
 
     }
 
