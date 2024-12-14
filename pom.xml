@@ -9,13 +9,13 @@
     </parent>
 
     <groupId>org.rra.processors.storescp</groupId>
-    <artifactId>nifi_store_scp_proc</artifactId>
+    <artifactId>nifi_cwm_proc</artifactId>
     <version>1.0-TEST</version>
     <packaging>pom</packaging>
 
     <modules>
-        <module>nifi-store-scp-processors</module>
-        <module>nifi-store-scp-nar</module>
+        <module>nifi-cwm-processors</module>
+        <module>nifi-cwm-nar</module>
     </modules>
 
 </project>
