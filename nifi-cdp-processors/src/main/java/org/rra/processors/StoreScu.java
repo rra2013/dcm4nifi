@@ -102,7 +102,7 @@ public class StoreScu extends AbstractProcessor {
         if (flowFile == null) {
             return;
         }
-        log.info("+ + + On Data from AET: {} + + +", flowFile.getAttribute("RetrieveAET"));
+        log.info("+ + + On Data from AET: {} + + +", flowFile.getAttribute("CallingAET"));
         String called_aet = context.getProperty(CALLED_AET).evaluateAttributeExpressions().getValue();
         String calling_aet = context.getProperty(CALLING_AET).evaluateAttributeExpressions().getValue();
         String remoteHost = context.getProperty(REMOTE_HOST).evaluateAttributeExpressions().getValue();

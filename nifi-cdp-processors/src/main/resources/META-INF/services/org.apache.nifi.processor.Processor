@@ -3,3 +3,6 @@ org.rra.processors.StoreScu
 org.rra.processors.Deidentify
 org.rra.processors.HL7Server
 org.rra.processors.HL72Xml
+org.rra.processors.DICOMRouter
+org.rra.processors.DICOMRelais
+org.rra.processors.SOPCLassFilter

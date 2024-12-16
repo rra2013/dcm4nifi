@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Slf4j
 @SupportsBatching
@@ -93,15 +94,18 @@ public class Deidentify extends AbstractProcessor {
             log.error("The Deidentify Model is null");
             return;
         }
-        log.info("+ + + On Data from AET: {} + + +", flowFile.getAttribute("RetrieveAET"));
+        log.info("+ + + On Data from AET: {} + + +", flowFile.getAttribute("CallingAET"));
         try {
+            AtomicReference<String> anonymSOPIUID = new AtomicReference("NO_UID");
             flowFile = session.write(flowFile, (in, out) -> {
                 try (OutputStream buffOut = new BufferedOutputStream(out)) {
                     try {
                         Attributes dcm = GeneralAnonymizer.anonymize(in, buffOut, deidentifyModel);
-                        log.info(" + + + StudyInstanceUID: {}", dcm.getString(Tag.StudyInstanceUID));
-                        log.info(" + + + SeriesInstanceUID:{}", dcm.getString(Tag.SeriesInstanceUID));
-                        log.info(" + + + SOPInstanceUID: {}", dcm.getString(Tag.SOPInstanceUID));
+                        String sopIUID = dcm.getString(Tag.SOPInstanceUID);
+                        anonymSOPIUID.set(sopIUID);
+                        log.debug(" + + + StudyInstanceUID: {}", dcm.getString(Tag.StudyInstanceUID));
+                        log.debug(" + + + SeriesInstanceUID:{}", dcm.getString(Tag.SeriesInstanceUID));
+                        log.debug(" + + + SOPInstanceUID: {}", sopIUID);
                     } catch (Exception e) {
                         throw new IOException(e);
                     }
@@ -109,6 +113,7 @@ public class Deidentify extends AbstractProcessor {
                     throw new RuntimeException(e);
                 }
             });
+            flowFile = session.putAttribute(flowFile, "AffectedSOPInstanceUID", anonymSOPIUID.get());
             session.transfer(flowFile, REL_SUCCESS);
         } catch (Exception e) {
             log.error(e.getMessage());

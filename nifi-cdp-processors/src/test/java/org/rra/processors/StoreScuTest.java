@@ -14,7 +14,7 @@ import java.util.HashMap;
 import java.util.List;
 @Slf4j
 public class StoreScuTest {
-    private static final String DICOM_PATH = "/home/dev/Documents/DICOM/2009";
+
     private static final List<byte[]> dcmObjects = new ArrayList<>();
 
     private TestRunner testRunner;
@@ -23,7 +23,7 @@ public class StoreScuTest {
     @BeforeAll
     public static void readData() {
         //Read DICOM Files
-        Utils.readDicomFiles(dcmObjects, DICOM_PATH);
+        Utils.readDicomFiles(dcmObjects, DataForTest.DICOM_PATH);
         Assertions.assertTrue(dcmObjects.size() > 0);
     }
     @BeforeEach
@@ -39,7 +39,7 @@ public class StoreScuTest {
         log.info("$ $ $ $ Run testSCP $ $ $ $ $");
         dcmObjects.forEach(dcmFileArray -> {
             HashMap<String, String> attr = new HashMap<>();
-            attr.put("RetrieveAET", "TEST_RUNNER");
+            attr.put("CallingAET", "TEST_RUNNER");
             testRunner.enqueue(dcmFileArray, attr);
             testRunner.run();
             log.info("Run with size {}", dcmFileArray.length);

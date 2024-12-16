@@ -48,7 +48,7 @@ public class DcmStoreScp {
         try {
             this.device.unbindConnections();
             scheduledExecutorService.shutdown();
-            return executorService.awaitTermination(10, TimeUnit.SECONDS);
+            return executorService.awaitTermination(3, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
 
         }
@@ -202,12 +202,12 @@ public class DcmStoreScp {
                     throw new IOException(ioException.getMessage());
                 }
                 try {
-                    final String retrieveAET = as.getAAssociateAC().getCallingAET();
+                    final String callingAET = as.getAAssociateAC().getCallingAET();
                     final String calledAET = as.getAAssociateAC().getCalledAET();
                     processSession.putAttribute(flowFile, "AffectedSOPClassUID", cuid);
                     processSession.putAttribute(flowFile, "AffectedSOPInstanceUID", iuid);
                     processSession.putAttribute(flowFile, "TransferSyntax", tsuid);
-                    processSession.putAttribute(flowFile, "RetrieveAET", retrieveAET);
+                    processSession.putAttribute(flowFile, "CallingAET", callingAET);
                     processSession.putAttribute(flowFile, "CalledAET", calledAET);
                     processSession.getProvenanceReporter().modifyContent(flowFile);
                     //Transfer

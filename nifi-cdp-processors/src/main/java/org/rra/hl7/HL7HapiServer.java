@@ -115,7 +115,7 @@ public class HL7HapiServer implements IHL7Server, ReceivingApplication<Message> 
                     /*processSession.putAttribute(flowFile, "AffectedSOPClassUID", cuid);
                     processSession.putAttribute(flowFile, "AffectedSOPInstanceUID", iuid);
                     processSession.putAttribute(flowFile, "TransferSyntax", tsuid);
-                    processSession.putAttribute(flowFile, "RetrieveAET", retrieveAET);
+                    processSession.putAttribute(flowFile, "CallingAET", CallingAET);
                     processSession.putAttribute(flowFile, "CalledAET", calledAET);*/
 
                     processSession.getProvenanceReporter().modifyContent(flowFile);

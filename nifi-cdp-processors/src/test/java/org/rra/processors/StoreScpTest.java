@@ -19,7 +19,7 @@ import java.util.List;
 
 @Slf4j
 public class StoreScpTest {
-    private static final String DICOM_PATH = "/home/dev/Documents/DICOM/AE801BA5";
+
     private static final List<byte[]> dcmObjects = new ArrayList<>();
 
     private TestRunner testRunner;
@@ -28,7 +28,7 @@ public class StoreScpTest {
     @BeforeAll
     public static void readData() {
         //Read DICOM Files
-        Utils.readDicomFiles(dcmObjects, DICOM_PATH);
+        Utils.readDicomFiles(dcmObjects, DataForTest.DICOM_PATH);
         Assertions.assertTrue(dcmObjects.size() > 0);
     }
 

@@ -26,7 +26,7 @@ import java.util.List;
 
 @Slf4j
 public class DeidentifyTest {
-    private static final String DICOM_PATH = "/home/dev/Documents/DICOM/AE801BA5";
+
     private static List<byte[]> dcmObjects = new ArrayList<>();
     private TestRunner testRunner;
     @BeforeAll
@@ -58,7 +58,7 @@ public class DeidentifyTest {
         Assertions.assertTrue(dcmObjects.size() > 0);
         dcmObjects.forEach(dcmFileArray -> {
             HashMap<String, String> attr = new HashMap<>();
-            attr.put("RetrieveAET", "TEST_RUNNER");
+            attr.put("CallingAET", "TEST_RUNNER");
             testRunner.enqueue(dcmFileArray, attr);
             testRunner.run();
             log.info("Run with size {}", dcmFileArray.length);
@@ -133,7 +133,7 @@ public class DeidentifyTest {
     private static void readDicomFiles(List<byte[]> dcmObjects) {
         Assertions.assertNotNull(dcmObjects);
 
-        File dir = new File(DICOM_PATH);
+        File dir = new File(DataForTest.DICOM_PATH);
         Collection<File> files = FileUtils.listFiles(dir, null, true);
         files.forEach(file -> {
             //log.debug("DICOM FIle: {}", file.getAbsolutePath());

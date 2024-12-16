@@ -33,8 +33,8 @@ import java.util.concurrent.atomic.AtomicReference;
 @WritesAttributes({
         @WritesAttribute(attribute="AffectedSOPClassUID", description="The Affected SOP Class UID"),
         @WritesAttribute(attribute="AffectedSOPInstanceUID", description="The Affected SOP Instance UID"),
-        @WritesAttribute(attribute="TransferSyntax", description="The Transfer Syntax"),
-        @WritesAttribute(attribute="RetrieveAET", description="The Retrieve AET"),
+        @WritesAttribute(attribute="TransferSyntax", description="The Transfer Syntax of the DICOM Object"),
+        @WritesAttribute(attribute="CallingAET", description="The Calling AET of the Associate AC"),
         @WritesAttribute(attribute="CalledAET", description="The Called AET of the Associate AC")
 })
 
@@ -67,7 +67,7 @@ public class StoreScp extends AbstractSessionFactoryProcessor {
     public static final PropertyDescriptor AET = new PropertyDescriptor.Builder()
             .name("AET")
             .displayName("AET")
-            .description("The AE Title of the SCP")
+            .description("The AE Title of the SCP. A '*' will accept any Association")
             .defaultValue("DCM4NIFI")
             .required(true)
             .expressionLanguageSupported(ExpressionLanguageScope.ENVIRONMENT)
