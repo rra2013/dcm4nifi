@@ -8,14 +8,14 @@
         <version>2.0.0-M4</version>
     </parent>
 
-    <groupId>org.rra.processors.storescp</groupId>
-    <artifactId>nifi_cwm_proc</artifactId>
-    <version>1.0-TEST</version>
+    <groupId>org.rra.processors</groupId>
+    <artifactId>nifi_cdp</artifactId>
+    <version>1.0</version>
     <packaging>pom</packaging>
 
     <modules>
-        <module>nifi-cwm-processors</module>
-        <module>nifi-cwm-nar</module>
+        <module>nifi-cdp-processors</module>
+        <module>nifi-cdp-nar</module>
     </modules>
 
 </project>

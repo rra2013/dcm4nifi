@@ -1,0 +1,5 @@
+org.rra.processors.StoreScp
+org.rra.processors.StoreScu
+org.rra.processors.Deidentify
+org.rra.processors.HL7Server
+org.rra.processors.HL72Xml
