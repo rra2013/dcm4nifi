@@ -210,7 +210,8 @@ public class DcmStoreScp {
                     processSession.putAttribute(flowFile, "CallingAET", callingAET);
                     processSession.putAttribute(flowFile, "CalledAET", calledAET);
                     processSession.getProvenanceReporter().modifyContent(flowFile);
-                    //Transfer
+                    //Transfer application/dicom
+                    flowFile = processSession.putAttribute(flowFile, "mime.type", "application/dicom");
                     processSession.transfer(flowFile, relationshipSuccess);
                 } catch (Exception exception) {
                     processSession.rollback();

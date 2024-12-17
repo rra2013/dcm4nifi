@@ -119,7 +119,8 @@ public class HL7HapiServer implements IHL7Server, ReceivingApplication<Message> 
                     processSession.putAttribute(flowFile, "CalledAET", calledAET);*/
 
                     processSession.getProvenanceReporter().modifyContent(flowFile);
-                    //Transfer
+                    //Transfer text/plain
+                    flowFile = processSession.putAttribute(flowFile, "mime.type", "text/plain");
                     processSession.transfer(flowFile, relationshipSuccess);
                 } catch (Exception exception) {
                     processSession.rollback();

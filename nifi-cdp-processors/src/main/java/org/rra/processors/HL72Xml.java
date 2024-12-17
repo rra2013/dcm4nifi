@@ -93,6 +93,7 @@ public class HL72Xml extends AbstractProcessor {
                     throw new RuntimeException(e);
                 }
             });
+            flowFile = session.putAttribute(flowFile, "mime.type", "application/xml");
             session.transfer(flowFile, REL_SUCCESS);
         } catch (Exception e) {
             log.error(e.getMessage());
