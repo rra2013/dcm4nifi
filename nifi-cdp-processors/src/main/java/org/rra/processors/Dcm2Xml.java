@@ -1,0 +1,93 @@
+package org.rra.processors;
+
+import lombok.extern.slf4j.Slf4j;
+import org.apache.nifi.annotation.behavior.InputRequirement;
+import org.apache.nifi.annotation.behavior.SideEffectFree;
+import org.apache.nifi.annotation.behavior.SupportsBatching;
+import org.apache.nifi.annotation.documentation.CapabilityDescription;
+import org.apache.nifi.annotation.documentation.Tags;
+import org.apache.nifi.annotation.documentation.UseCase;
+import org.apache.nifi.components.PropertyDescriptor;
+import org.apache.nifi.flowfile.FlowFile;
+import org.apache.nifi.processor.*;
+import org.apache.nifi.processor.exception.ProcessException;
+import org.dcm4che3.data.Attributes;
+import org.dcm4che3.data.Tag;
+import org.rra.dcm.Dcm2XmlTransformer;
+import org.rra.deidentify.GeneralAnonymizer;
+
+import java.io.BufferedOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
+
+@Slf4j
+@SupportsBatching
+@InputRequirement(InputRequirement.Requirement.INPUT_REQUIRED)
+@SideEffectFree
+@Tags({"CDP", "DICOM", "dcm2xml","xml"})
+@CapabilityDescription("A DICOM XML Converter based on dcm4che. Will convert a DICOM object in XML during the NIFI Workflows")
+@UseCase(description = "Convert a DICOM Object in XML",
+        inputRequirement = InputRequirement.Requirement.INPUT_REQUIRED)
+
+public class Dcm2Xml extends AbstractProcessor {
+
+    public static final Relationship REL_SUCCESS = new Relationship.Builder()
+            .name("success")
+            .description("Success relationship of the DICOM 2 XML process")
+            .build();
+    public static final Relationship REL_FAILURE = new Relationship.Builder()
+            .name("failure")
+            .description("DICOM 2 XML Failed").build();
+
+
+    private List<PropertyDescriptor> descriptors;
+
+    private Set<Relationship> relationships;
+
+    @Override
+    public void onTrigger(ProcessContext context, ProcessSession session) throws ProcessException {
+        FlowFile flowFile = session.get();
+        if (flowFile == null) {
+            return;
+        }
+        try {
+            flowFile = session.write(flowFile, (in, out) -> {
+                try (OutputStream buffOut = new BufferedOutputStream(out)) {
+                    try {
+                        Dcm2XmlTransformer.transform(in, buffOut);
+                    } catch (Exception e) {
+                        throw new IOException(e);
+                    }
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            });
+            flowFile = session.putAttribute(flowFile, "mime.type", "application/xml");
+            session.transfer(flowFile, REL_SUCCESS);
+        } catch (Exception e) {
+            log.error(e.getMessage());
+            session.transfer(flowFile, REL_FAILURE);
+        }
+    }
+
+    @Override
+    protected void init(final ProcessorInitializationContext context) {
+        descriptors = new ArrayList<>();
+        relationships = Set.of(REL_SUCCESS, REL_FAILURE);
+    }
+
+    @Override
+    public Set<Relationship> getRelationships() {
+        return this.relationships;
+    }
+
+    @Override
+    public final List<PropertyDescriptor> getSupportedPropertyDescriptors() {
+        return descriptors;
+    }
+
+}
