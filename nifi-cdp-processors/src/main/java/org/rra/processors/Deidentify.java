@@ -88,7 +88,6 @@ public class Deidentify extends AbstractProcessor {
         if (flowFile == null) {
             return;
         }
-
         DeidentifyModel deidentifyModel = DeidentifyModel.getModel();
         if (null == deidentifyModel) {
             log.error("The Deidentify Model is null");

@@ -58,6 +58,7 @@ public class SOPCLassFilter extends AbstractProcessor {
         if (flowFile == null) {
             return;
         }
+
         if (context.getProperty(FILTER_SOP_CLASS).isSet()) {
             String filterSopIuid = context.getProperty(FILTER_SOP_CLASS).evaluateAttributeExpressions(flowFile).getValue();
             if (filterSopIuid.equals("*")){

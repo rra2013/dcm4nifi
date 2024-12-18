@@ -15,7 +15,7 @@ import org.apache.nifi.annotation.documentation.Tags;
 import org.apache.nifi.processor.*;
 import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.util.StandardValidators;
-import org.rra.store.DcmStoreScp;
+import org.rra.cstore.DcmStoreScp;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;

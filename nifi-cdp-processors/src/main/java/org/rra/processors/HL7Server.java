@@ -34,17 +34,6 @@ public class HL7Server extends AbstractSessionFactoryProcessor {
 
     private final AtomicReference<ProcessSessionFactory> sessionFactory = new AtomicReference<>();
     private volatile CountDownLatch sessionFactorySetSignal;
-    /*public static final PropertyDescriptor BIND_ADDRESS = new PropertyDescriptor.Builder()
-            .name("bind-address")
-            .displayName("Bind Address")
-            .description("The address the HL7 server should be bound to. If not set (or set to 0.0.0.0), "
-                    + "the server binds to all available addresses (i.e. all network interfaces of the host machine).")
-            .required(false)
-            .defaultValue("0.0.0.0")
-            .expressionLanguageSupported(ExpressionLanguageScope.ENVIRONMENT)
-            .addValidator(StandardValidators.NON_BLANK_VALIDATOR)
-            .build();
-*/
     public static final PropertyDescriptor PORT = new PropertyDescriptor.Builder()
             .name("listening-port")
             .displayName("Listening Port")

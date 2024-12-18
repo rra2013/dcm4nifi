@@ -11,7 +11,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.rra.dcm.DicomDataReader;
-import org.rra.store.DcmStoreSCU;
+import org.rra.cstore.DcmStoreSCU;
 
 import java.io.*;
 import java.util.ArrayList;

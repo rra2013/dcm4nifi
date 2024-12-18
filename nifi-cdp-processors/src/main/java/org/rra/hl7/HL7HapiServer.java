@@ -112,12 +112,6 @@ public class HL7HapiServer implements IHL7Server, ReceivingApplication<Message> 
                     throw new IOException(ioException.getMessage());
                 }
                 try {
-                    /*processSession.putAttribute(flowFile, "AffectedSOPClassUID", cuid);
-                    processSession.putAttribute(flowFile, "AffectedSOPInstanceUID", iuid);
-                    processSession.putAttribute(flowFile, "TransferSyntax", tsuid);
-                    processSession.putAttribute(flowFile, "CallingAET", CallingAET);
-                    processSession.putAttribute(flowFile, "CalledAET", calledAET);*/
-
                     processSession.getProvenanceReporter().modifyContent(flowFile);
                     //Transfer text/plain
                     flowFile = processSession.putAttribute(flowFile, "mime.type", "text/plain");

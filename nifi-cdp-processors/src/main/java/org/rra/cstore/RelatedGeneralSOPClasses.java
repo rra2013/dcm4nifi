@@ -36,7 +36,7 @@
  *
  * ***** END LICENSE BLOCK ***** */
 
-package org.rra.store;
+package org.rra.cstore;
 
 import org.dcm4che3.data.UID;
 import org.dcm4che3.net.pdu.CommonExtendedNegotiation;

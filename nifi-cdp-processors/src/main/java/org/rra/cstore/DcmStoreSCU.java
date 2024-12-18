@@ -1,4 +1,4 @@
-package org.rra.store;
+package org.rra.cstore;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -26,7 +26,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
-import static org.rra.store.DcmStoreSCUConfig.*;
+import static org.rra.cstore.DcmStoreSCUConfig.*;
 
 
 @Slf4j

@@ -12,7 +12,7 @@ import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.processor.*;
 import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.util.StandardValidators;
-import org.rra.store.DcmStoreSCU;
+import org.rra.cstore.DcmStoreSCU;
 
 import java.io.BufferedInputStream;
 import java.io.InputStream;

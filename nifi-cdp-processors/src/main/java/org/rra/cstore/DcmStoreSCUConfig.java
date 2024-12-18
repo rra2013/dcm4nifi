@@ -1,4 +1,4 @@
-package org.rra.store;
+package org.rra.cstore;
 
 public class DcmStoreSCUConfig {
     public static boolean NOT_ASYNC = false;
