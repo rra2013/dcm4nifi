@@ -13,6 +13,7 @@ import org.apache.nifi.annotation.lifecycle.OnScheduled;
 import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.expression.ExpressionLanguageScope;
 import org.apache.nifi.flowfile.FlowFile;
+import org.apache.nifi.flowfile.attributes.CoreAttributes;
 import org.apache.nifi.processor.*;
 import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.util.StandardValidators;
@@ -21,6 +22,7 @@ import org.dcm4che3.data.UID;
 import org.dcm4che3.io.DicomOutputStream;
 import org.dcm4che3.util.SafeClose;
 import org.rra.cfind.DcmFindScu;
+import org.rra.cstore.NifiStoreSCU;
 
 import java.io.BufferedOutputStream;
 import java.io.IOException;
@@ -30,6 +32,7 @@ import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import static org.rra.cfind.DcmFindScu.*;
 
@@ -173,6 +176,7 @@ public class FindScu extends AbstractProcessor {
                 session.remove(flowFile);
             },attributes -> {
                 try {
+                    long t1 = System.nanoTime();
                     FlowFile qResItem = session.create();
                     try (OutputStream outputStream = session.write(qResItem)) {
                         try (BufferedOutputStream bos = new BufferedOutputStream(outputStream)) {
@@ -187,8 +191,10 @@ public class FindScu extends AbstractProcessor {
                         session.rollback();
                         throw new IOException(ioException.getMessage());
                     }
-                    session.getProvenanceReporter().modifyContent(qResItem);
-                    qResItem = session.putAttribute(qResItem, "mime.type", "application/dicom");
+                    qResItem = session.putAttribute(qResItem, CoreAttributes.MIME_TYPE.key(), "application/dicom");
+                    final long importNanos = System.nanoTime() - t1;
+                    final long importMillis = TimeUnit.MILLISECONDS.convert(importNanos, TimeUnit.NANOSECONDS);
+                    session.getProvenanceReporter().receive(qResItem, called_aet, importMillis);
                     session.transfer(qResItem, REL_SUCCESS);
                     session.commitAsync(() -> {
                         log.info("Flow File Commit OK.");
@@ -199,6 +205,7 @@ public class FindScu extends AbstractProcessor {
                 }
             });
         } catch (Exception e) {
+            session.getProvenanceReporter().route(flowFile, REL_FAILURE);
             session.transfer(flowFile, REL_FAILURE);
         }
 

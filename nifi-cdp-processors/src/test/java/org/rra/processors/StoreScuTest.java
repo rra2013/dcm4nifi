@@ -12,12 +12,13 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+
 @Slf4j
 public class StoreScuTest {
 
     private static final List<byte[]> dcmObjects = new ArrayList<>();
 
-    private TestRunner testRunner;
+    private TestRunner testSCU;
     private TestRunner testSCP;
     private StoreScp proc;
     @BeforeAll
@@ -29,23 +30,28 @@ public class StoreScuTest {
     @BeforeEach
     public void init() {
         proc = new StoreScp();
-        testRunner = TestRunners.newTestRunner(StoreScu.class);
+        testSCU = TestRunners.newTestRunner(StoreScu.class);
         testSCP = TestRunners.newTestRunner(proc);
     }
     @Test
     public void testProcessor() {
+        testSCU.setValidateExpressionUsage(false);
+        testSCP.setValidateExpressionUsage(false);
+        //
+        testSCP.setProperty(StoreScp.PORT, "11112");
         testSCP.enqueue("TEST");
         testSCP.run(1, false, true);
         log.info("$ $ $ $ Run testSCP $ $ $ $ $");
         dcmObjects.forEach(dcmFileArray -> {
             HashMap<String, String> attr = new HashMap<>();
             attr.put("CallingAET", "TEST_RUNNER");
-            testRunner.enqueue(dcmFileArray, attr);
-            testRunner.run();
+            testSCU.setProperty(StoreScu.PORT, "11112");
+            testSCU.enqueue(dcmFileArray, attr);
+            testSCU.run();
             log.info("Run with size {}", dcmFileArray.length);
         });
 
-        List<MockFlowFile> success = testRunner.getFlowFilesForRelationship(StoreScu.REL_SUCCESS);
+        List<MockFlowFile> success = testSCU.getFlowFilesForRelationship(StoreScu.REL_SUCCESS);
         List<MockFlowFile> successSCP = testSCP.getFlowFilesForRelationship(StoreScp.REL_SUCCESS);
         log.info("Count of success {}:{}", success.size(), successSCP.size());
         Assertions.assertTrue(success.size() >= dcmObjects.size());

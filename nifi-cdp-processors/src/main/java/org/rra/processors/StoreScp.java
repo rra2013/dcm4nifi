@@ -15,7 +15,7 @@ import org.apache.nifi.annotation.documentation.Tags;
 import org.apache.nifi.processor.*;
 import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.util.StandardValidators;
-import org.rra.cstore.DcmStoreScp;
+import org.rra.cstore.NifiStoreScp;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -83,7 +83,7 @@ public class StoreScp extends AbstractSessionFactoryProcessor {
 
     private Set<Relationship> relationships;
 
-    private DcmStoreScp dcmStoreScp;
+    private NifiStoreScp nifiStoreScp;
 
     @Override
     protected void init(final ProcessorInitializationContext context) {
@@ -104,25 +104,34 @@ public class StoreScp extends AbstractSessionFactoryProcessor {
 
     @OnScheduled
     public void startStoreSCP(final ProcessContext context) {
-        String aet = context.getProperty(AET).evaluateAttributeExpressions().getValue();
-        String bindAddress = context.getProperty(BIND_ADDRESS).evaluateAttributeExpressions().getValue();
-        int port = context.getProperty(PORT).evaluateAttributeExpressions().asInteger();
-        log.info("+ + + Start the Store SCP {}@{}:{} + + +", aet, bindAddress, port);
-        if (null == dcmStoreScp) {
-            sessionFactorySetSignal = new CountDownLatch(1);
+        if (null == nifiStoreScp) {
             sessionFactory.set(null);
-            dcmStoreScp = new DcmStoreScp(bindAddress, port, aet);
-            dcmStoreScp.setSessionFactory(sessionFactory);
-            dcmStoreScp.setSessionFactorySetSignal(sessionFactorySetSignal);
-            dcmStoreScp.setRelationshipSuccess(REL_SUCCESS);
+            String aet = context.getProperty(AET).evaluateAttributeExpressions().getValue();
+            String bindAddress = context.getProperty(BIND_ADDRESS).evaluateAttributeExpressions().getValue();
+            int port = context.getProperty(PORT).evaluateAttributeExpressions().asInteger();
+            log.info("+ + + Start the Store SCP {}@{}:{} + + +", aet, bindAddress, port);
+            try{
+                sessionFactorySetSignal = new CountDownLatch(1);
+                nifiStoreScp = new NifiStoreScp(bindAddress, port, aet);
+                nifiStoreScp.setSessionFactory(sessionFactory);
+                nifiStoreScp.setSessionFactorySetSignal(sessionFactorySetSignal);
+                nifiStoreScp.setRelationshipSuccess(REL_SUCCESS);
+                nifiStoreScp.start();
+            } catch (ProcessException processException) {
+                log.error(processException.getMessage(), processException);
+                stopStoreSCP();
+                throw processException;
+            }
+        }else {
+            getLogger().warn("SCP server already started.");
         }
 
     }
     @OnStopped
     public void stopStoreSCP(){
         log.info("+ + + Stop the Store SCP + + + ");
-        if (null != dcmStoreScp) dcmStoreScp.shutDown();
-        dcmStoreScp = null;
+        if (null != nifiStoreScp) nifiStoreScp.shutDown();
+        nifiStoreScp = null;
         sessionFactory.set(null);
     }
 

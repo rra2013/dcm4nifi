@@ -1,6 +1,6 @@
 package org.rra.cstore;
 
-public class DcmStoreSCUConfig {
+public class NifiStoreSCUConfig {
     public static boolean NOT_ASYNC = false;
     public static boolean NOT_PACK_PDV = false;
     public static boolean TCP_DELAY = false;

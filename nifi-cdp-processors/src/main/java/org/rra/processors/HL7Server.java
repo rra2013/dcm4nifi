@@ -9,17 +9,13 @@ import org.apache.nifi.annotation.documentation.UseCase;
 import org.apache.nifi.annotation.lifecycle.OnScheduled;
 import org.apache.nifi.annotation.lifecycle.OnStopped;
 import org.apache.nifi.components.PropertyDescriptor;
-import org.apache.nifi.components.ValidationContext;
-import org.apache.nifi.components.ValidationResult;
 import org.apache.nifi.expression.ExpressionLanguageScope;
 import org.apache.nifi.processor.*;
 import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.util.StandardValidators;
-import org.rra.hl7.HL7HapiServer;
+import org.rra.hl7.NifiHL7HapiServer;
 import org.rra.hl7.IHL7Server;
 
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
@@ -79,21 +75,22 @@ public class HL7Server extends AbstractSessionFactoryProcessor {
     }
     @OnScheduled
     public void startHL7Server(final ProcessContext context) {
-        int port = context.getProperty(PORT).evaluateAttributeExpressions().asInteger();
-        String msgType = context.getProperty(MESSAGE_TYPE).evaluateAttributeExpressions().getValue();
-        String trigger = context.getProperty(TRIGGER_EVENT).evaluateAttributeExpressions().getValue();
         if (null == server) {
-            sessionFactorySetSignal = new CountDownLatch(1);
             sessionFactory.set(null);
-            server = new HL7HapiServer(sessionFactory, sessionFactorySetSignal, REL_SUCCESS);
+            int port = context.getProperty(PORT).evaluateAttributeExpressions().asInteger();
+            String msgType = context.getProperty(MESSAGE_TYPE).evaluateAttributeExpressions().getValue();
+            String trigger = context.getProperty(TRIGGER_EVENT).evaluateAttributeExpressions().getValue();
             try {
+                sessionFactorySetSignal = new CountDownLatch(1);
+                server = new NifiHL7HapiServer(sessionFactory, sessionFactorySetSignal, REL_SUCCESS);
                 server.startServer(port, msgType, trigger);
-            } catch (InterruptedException e) {
-                server = null;
-                log.error(e.getMessage());
+            } catch (ProcessException processException) {
+                log.error(processException.getMessage(), processException);
+                stopHL7Server();
+                throw processException;
             }
         }else{
-            log.info("Server is all ready listening on port: {}", port);
+            log.info("Server is all ready started");
         }
     }
     @OnStopped

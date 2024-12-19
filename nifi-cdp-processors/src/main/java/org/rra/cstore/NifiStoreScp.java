@@ -3,9 +3,11 @@ package org.rra.cstore;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.nifi.flowfile.FlowFile;
+import org.apache.nifi.flowfile.attributes.CoreAttributes;
 import org.apache.nifi.processor.ProcessSession;
 import org.apache.nifi.processor.ProcessSessionFactory;
 import org.apache.nifi.processor.Relationship;
+import org.apache.nifi.processor.exception.ProcessException;
 import org.dcm4che3.data.Attributes;
 import org.dcm4che3.data.Tag;
 import org.dcm4che3.data.UID;
@@ -23,12 +25,13 @@ import org.dcm4che3.util.StringUtils;
 
 import java.io.*;
 import java.net.SocketException;
+import java.security.GeneralSecurityException;
 import java.util.Properties;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
 
 @Slf4j
-public class DcmStoreScp {
+public class NifiStoreScp {
 
     private final Device device = new Device("store_scp");
     private final ApplicationEntity ae = new ApplicationEntity("*");
@@ -39,7 +42,7 @@ public class DcmStoreScp {
     private CountDownLatch sessionFactorySetSignal;
     private Relationship relationshipSuccess;
 
-    public DcmStoreScp(String host, int port, String calledAET) {
+    public NifiStoreScp(String host, int port, String calledAET){
         init(host, port, calledAET);
     }
 
@@ -89,49 +92,39 @@ public class DcmStoreScp {
         Properties p;
         try {
             p = loadProperties("resource:sop-classes.properties", null);
-//            System.out.println("SOP Class Name" + ";" + "SOP Class UID" + "; SCU ; SCP" );
-//            p.forEach((o, o2) -> {
-//                String uid = UID.forName((String) o);
-//                System.out.println(o + ";" + uid + "; Yes ; Yes" );
-//            });
             log.info("+ + + Read store-scp properties ok. + + +");
+            log.info("+ + + " + calledAET + "@" + host + ":" + port + " + + +");
+            device.setDimseRQHandler(createServiceRegistry());
+            device.addConnection(conn);
+            device.addApplicationEntity(ae);
+            ae.setAssociationAcceptor(true);
+            ae.addConnection(conn);
+            ae.setAETitle(calledAET);
+            //Bind to 0.0.0.0!!!
+            //Dont set the host
+            conn.setHostname(host);
+            conn.setPort(port);
+            for (String cuid : p.stringPropertyNames()) {
+                String ts = p.getProperty(cuid);
+                TransferCapability tc = new TransferCapability(null,
+                        toUID(cuid),
+                        TransferCapability.Role.SCP,
+                        toUIDs(ts));
+                ae.addTransferCapability(tc);
+            }
+            device.setScheduledExecutor(scheduledExecutorService);
+            device.setExecutor(executorService);
         } catch (IOException e) {
-            e.printStackTrace();
-            return;
+            log.error(e.getMessage(), e);
         }
-        log.info("+ + + " + calledAET + "@" + host + ":" + port + " + + +");
-        device.setDimseRQHandler(createServiceRegistry());
-        device.addConnection(conn);
-        device.addApplicationEntity(ae);
-        ae.setAssociationAcceptor(true);
-        ae.addConnection(conn);
-        ae.setAETitle(calledAET);
-        //Bind to 0.0.0.0!!!
-        //Dont set the host
-        //conn.setHostname(host);
-        conn.setPort(port);
-        for (String cuid : p.stringPropertyNames()) {
-            String ts = p.getProperty(cuid);
-            TransferCapability tc = new TransferCapability(null,
-                    toUID(cuid),
-                    TransferCapability.Role.SCP,
-                    toUIDs(ts));
-            ae.addTransferCapability(tc);
-        }
-
-
-
-        device.setScheduledExecutor(scheduledExecutorService);
-        device.setExecutor(executorService);
+    }
+    public void start(){
         try {
             device.bindConnections();
-
         } catch (Exception e) {
-            e.printStackTrace();
+            throw new ProcessException("Store-SCP server could not be started.", e);
         }
-        log.info("+ + + Store-SCP instantiated + + +");
     }
-
     private DicomServiceRegistry createServiceRegistry(/*String storageDir*/) {
         DicomServiceRegistry serviceRegistry = new DicomServiceRegistry();
         serviceRegistry.addDicomService(new BasicCEchoSCP());
@@ -187,6 +180,7 @@ public class DcmStoreScp {
             }
             FlowFile flowFile = processSession.create();
             try {
+                long t1 = System.nanoTime();
                 try (OutputStream flowFileOutputStream = processSession.write(flowFile)) {
                     try(BufferedOutputStream bos = new BufferedOutputStream(flowFileOutputStream)){
                         storeOnlyAttributesTo(bos, data);
@@ -209,9 +203,13 @@ public class DcmStoreScp {
                     processSession.putAttribute(flowFile, "TransferSyntax", tsuid);
                     processSession.putAttribute(flowFile, "CallingAET", callingAET);
                     processSession.putAttribute(flowFile, "CalledAET", calledAET);
-                    processSession.getProvenanceReporter().modifyContent(flowFile);
                     //Transfer application/dicom
-                    flowFile = processSession.putAttribute(flowFile, "mime.type", "application/dicom");
+                    flowFile = processSession.putAttribute(flowFile, CoreAttributes.MIME_TYPE.key(), "application/dicom");
+                    //processSession.getProvenanceReporter().modifyContent(flowFile);
+                    final long importNanos = System.nanoTime() - t1;
+                    final long importMillis = TimeUnit.MILLISECONDS.convert(importNanos, TimeUnit.NANOSECONDS);
+                    processSession.getProvenanceReporter().receive(flowFile, callingAET, importMillis);
+                    //
                     processSession.transfer(flowFile, relationshipSuccess);
                 } catch (Exception exception) {
                     processSession.rollback();

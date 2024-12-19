@@ -14,6 +14,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.rra.cfind.DcmFindScu.*;
+import static org.rra.processors.DataForTest.DICOM_SERVER_HOST;
+import static org.rra.processors.DataForTest.DICOM_SERVER_PORT;
 import static org.rra.processors.FindScu.*;
 
 @Slf4j
@@ -32,7 +34,8 @@ public class FindScuTest {
         testRunner.setValidateExpressionUsage(false);
         //Patient/study level
         testRunner.setProperty(FindScu.QUERY_LEVEL, PATSTUDY_LEVEL);
-        testRunner.setProperty(REMOTE_HOST, "desktop-71bjvr0");
+        testRunner.setProperty(REMOTE_HOST, DICOM_SERVER_HOST);
+        testRunner.setProperty(PORT, Integer.toString(DICOM_SERVER_PORT));
         testRunner.enqueue("56757");
         testRunner.run();
         List<MockFlowFile> success = testRunner.getFlowFilesForRelationship(REL_SUCCESS);

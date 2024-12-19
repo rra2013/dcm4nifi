@@ -12,7 +12,7 @@ import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.processor.*;
 import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.util.StandardValidators;
-import org.rra.cstore.DcmStoreSCU;
+import org.rra.cstore.NifiStoreSCU;
 
 import java.io.BufferedInputStream;
 import java.io.InputStream;
@@ -92,7 +92,7 @@ public class StoreScu extends AbstractProcessor {
     }
 
     @OnScheduled
-    public void startStoreSCU(final ProcessContext context) {
+    public void start(final ProcessContext context) {
         log.info("+ + + Start {} OK. + + +", getClass().getSimpleName());
     }
 
@@ -110,13 +110,15 @@ public class StoreScu extends AbstractProcessor {
         try {
             try (InputStream inputStream = session.read(flowFile)) {
                 try (BufferedInputStream bis = new BufferedInputStream(inputStream)) {
-                    new DcmStoreSCU(remoteHost, port, calling_aet, called_aet, bis);
+                    new NifiStoreSCU(remoteHost, port, calling_aet, called_aet, bis);
                 }
             } catch (Exception e) {
                 throw e;
             }
+            session.getProvenanceReporter().route(flowFile, REL_SUCCESS);
             session.transfer(flowFile, REL_SUCCESS);
         } catch (Exception e) {
+            session.getProvenanceReporter().route(flowFile, REL_FAILURE);
             session.transfer(flowFile, REL_FAILURE);
         }
     }

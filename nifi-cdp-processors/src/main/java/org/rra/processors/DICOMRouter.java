@@ -63,11 +63,14 @@ public class DICOMRouter extends AbstractProcessor {
             String routeAET = context.getProperty(ROUTE_AET).evaluateAttributeExpressions(flowFile).getValue();
             String callingAET = flowFile.getAttribute("CallingAET");
             if (routeAET.equalsIgnoreCase(callingAET)) {
+                session.getProvenanceReporter().route(flowFile, REL_SUCCESS);
                 session.transfer(flowFile, REL_SUCCESS);
             } else {
+                session.getProvenanceReporter().route(flowFile, REL_FAILURE);
                 session.transfer(flowFile, REL_FAILURE);
             }
         } else {
+            session.getProvenanceReporter().route(flowFile, REL_FAILURE);
             session.transfer(flowFile, REL_FAILURE);
         }
     }

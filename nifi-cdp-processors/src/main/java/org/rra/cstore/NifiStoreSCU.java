@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.nifi.processor.exception.ProcessException;
 import org.dcm4che3.data.Attributes;
 import org.dcm4che3.data.Tag;
 import org.dcm4che3.data.UID;
@@ -26,11 +27,11 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
-import static org.rra.cstore.DcmStoreSCUConfig.*;
+import static org.rra.cstore.NifiStoreSCUConfig.*;
 
 
 @Slf4j
-public class DcmStoreSCU {
+public class NifiStoreSCU {
     private final Device device = new Device("storescu");
     private final ApplicationEntity ae;
     private final AAssociateRQ rq = new AAssociateRQ();
@@ -60,19 +61,23 @@ public class DcmStoreSCU {
                 @Override
                 public void onDimseRSP(Association as, Attributes cmd, Attributes data) {
                     super.onDimseRSP(as, cmd, data);
-                    DcmStoreSCU.this.onCStoreRSP(cmd);
+                    NifiStoreSCU.this.onCStoreRSP(cmd);
                 }
             };
         }
     };
 
-    public DcmStoreSCU(String host, int port, String callingAET, String calledAET) throws Exception {
+    public NifiStoreSCU(String host, int port, String callingAET, String calledAET) throws ProcessException {
         //Do only echo
         this(host, port, callingAET, calledAET, null);
-        doEcho();
+        try {
+            doEcho();
+        } catch (Exception e) {
+            throw new ProcessException("C-Echo failed. SCU could not connect to remote host.", e);
+        }
     }
 
-    public DcmStoreSCU(String host, int port, String callingAET, String calledAET, InputStream inputStream) throws Exception {
+    public NifiStoreSCU(String host, int port, String callingAET, String calledAET, InputStream inputStream) throws ProcessException {
 
         this.device.addConnection(conn);
         this.ae = new ApplicationEntity(callingAET);
@@ -97,14 +102,16 @@ public class DcmStoreSCU {
         this.streamMetaInfos = new ArrayList<>();
         addStreamToSendList(inputStream, new CallbackStream() {
             @Override
-            public boolean dicomFile(Attributes fmi, long dsPos, Attributes ds) throws Exception {
-
+            public boolean dicomObject(Attributes fmi, long dsPos, Attributes ds) {
                 if (!addFileStream(streamMetaInfos, ds, dsPos, fmi)) return false;
-
                 return true;
             }
         });
-        sendStreamMetaInfos();
+        try {
+            sendStreamMetaInfos();
+        } catch (Exception e) {
+            throw new ProcessException("Nothing to send.", e);
+        }
     }
 
     private static void configure(Connection conn) {
@@ -175,7 +182,7 @@ public class DcmStoreSCU {
             if (null != bytes) log.info("Count of pixel data {}", bytes.length);
             if (fmi == null || !fmi.containsValue(Tag.TransferSyntaxUID) || !fmi.containsValue(Tag.MediaStorageSOPClassUID) || !fmi.containsValue(Tag.MediaStorageSOPInstanceUID))
                 fmi = ds.createFileMetaInformation(in.getTransferSyntax());
-            boolean b = scb.dicomFile(fmi, dsPos, ds);
+            boolean b = scb.dicomObject(fmi, dsPos, ds);
             log.debug(b ? "'Stream added to Send List" : "Could Not Add Stream, not a DICOM Stream");
         } catch (Exception e) {
             e.printStackTrace(System.out);
@@ -414,7 +421,7 @@ public class DcmStoreSCU {
     }
 
     private interface CallbackStream {
-        boolean dicomFile(Attributes fmi, long dsPos, Attributes ds) throws Exception;
+        boolean dicomObject(Attributes fmi, long dsPos, Attributes ds) throws Exception;
     }
 
     public interface SendingCallback {

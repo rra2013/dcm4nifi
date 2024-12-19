@@ -14,9 +14,11 @@ import ca.uhn.hl7v2.util.idgenerator.InMemoryIDGenerator;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.IOUtils;
 import org.apache.nifi.flowfile.FlowFile;
+import org.apache.nifi.flowfile.attributes.CoreAttributes;
 import org.apache.nifi.processor.ProcessSession;
 import org.apache.nifi.processor.ProcessSessionFactory;
 import org.apache.nifi.processor.Relationship;
+import org.apache.nifi.processor.exception.ProcessException;
 
 import java.io.*;
 import java.net.SocketException;
@@ -28,7 +30,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
 @Slf4j
-public class HL7HapiServer implements IHL7Server, ReceivingApplication<Message> , ConnectionListener, ReceivingApplicationExceptionHandler {
+public class NifiHL7HapiServer implements IHL7Server, ReceivingApplication<Message> , ConnectionListener, ReceivingApplicationExceptionHandler {
 
 
     private final AtomicReference<ProcessSessionFactory> sessionFactory;
@@ -42,7 +44,7 @@ public class HL7HapiServer implements IHL7Server, ReceivingApplication<Message> 
         context.getParserConfiguration().setValidating(false);
     }
 
-    public HL7HapiServer(AtomicReference<ProcessSessionFactory> sessionFactory, CountDownLatch sessionFactorySetSignal, Relationship relSuccess) {
+    public NifiHL7HapiServer(AtomicReference<ProcessSessionFactory> sessionFactory, CountDownLatch sessionFactorySetSignal, Relationship relSuccess) {
         this.sessionFactory = sessionFactory;
         this.sessionFactorySetSignal = sessionFactorySetSignal;
         this.relationshipSuccess = relSuccess;
@@ -61,13 +63,17 @@ public class HL7HapiServer implements IHL7Server, ReceivingApplication<Message> 
     }
 
     @Override
-    public void startServer(int port, String msgType, String trigger) throws InterruptedException {
+    public void startServer(int port, String msgType, String trigger) {
         boolean useTls = false; // Should we use TLS/SSL?
         server = context.newServer(port, useTls);
         server.registerApplication(msgType, trigger, this);
         server.registerConnectionListener(this);
         server.setExceptionHandler(this);
-        server.startAndWait();
+        try {
+            server.startAndWait();
+        } catch (InterruptedException e) {
+            throw new ProcessException("HL7 server could not be started.", e);
+        }
         log.info("HL7 Server started. OK.");
     }
 
@@ -100,6 +106,7 @@ public class HL7HapiServer implements IHL7Server, ReceivingApplication<Message> 
             final ProcessSession processSession = createProcessSession();
             FlowFile flowFile = processSession.create();
             try {
+                long t1 = System.nanoTime();
                 try (OutputStream flowFileOutputStream = processSession.write(flowFile)) {
                     copyMessage(encodedMessage, flowFileOutputStream);
                 } catch (SocketException socketException) {
@@ -112,9 +119,14 @@ public class HL7HapiServer implements IHL7Server, ReceivingApplication<Message> 
                     throw new IOException(ioException.getMessage());
                 }
                 try {
-                    processSession.getProvenanceReporter().modifyContent(flowFile);
                     //Transfer text/plain
-                    flowFile = processSession.putAttribute(flowFile, "mime.type", "text/plain");
+                    flowFile = processSession.putAttribute(flowFile, CoreAttributes.MIME_TYPE.key(), "text/plain");
+                    //processSession.getProvenanceReporter().modifyContent(flowFile);
+
+                    final long importNanos = System.nanoTime() - t1;
+                    final long importMillis = TimeUnit.MILLISECONDS.convert(importNanos, TimeUnit.NANOSECONDS);
+                    processSession.getProvenanceReporter().receive(flowFile, "HL7/MLLP", importMillis);
+
                     processSession.transfer(flowFile, relationshipSuccess);
                 } catch (Exception exception) {
                     processSession.rollback();

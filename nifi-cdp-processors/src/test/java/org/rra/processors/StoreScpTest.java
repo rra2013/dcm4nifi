@@ -11,7 +11,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.rra.dcm.DicomDataReader;
-import org.rra.cstore.DcmStoreSCU;
+import org.rra.cstore.NifiStoreSCU;
 
 import java.io.*;
 import java.util.ArrayList;
@@ -50,7 +50,7 @@ public class StoreScpTest {
             dcmObjects.forEach(bytes -> {
                 try (ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(bytes)) {
                     try (BufferedInputStream bis = new BufferedInputStream(byteArrayInputStream)) {
-                        new DcmStoreSCU("dev-test-vm1", 11115, "NIFI_SCU", "DCM4NIFI", bis);
+                        new NifiStoreSCU("dev-test-vm1", 11115, "NIFI_SCU", "DCM4NIFI", bis);
                     }
                 } catch (Exception e) {
 

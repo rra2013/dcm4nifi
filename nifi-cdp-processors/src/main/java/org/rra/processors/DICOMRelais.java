@@ -63,11 +63,14 @@ public class DICOMRelais extends AbstractProcessor {
             String routeAET = context.getProperty(ROUTE_AET).evaluateAttributeExpressions(flowFile).getValue();
             String calledAET = flowFile.getAttribute("CalledAET");
             if (routeAET.equalsIgnoreCase(calledAET)) {
+                session.getProvenanceReporter().route(flowFile, REL_SUCCESS);
                 session.transfer(flowFile, REL_SUCCESS);
             } else {
+                session.getProvenanceReporter().route(flowFile, REL_FAILURE);
                 session.transfer(flowFile, REL_FAILURE);
             }
         } else {
+            session.getProvenanceReporter().route(flowFile, REL_FAILURE);
             session.transfer(flowFile, REL_FAILURE);
         }
     }

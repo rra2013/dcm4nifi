@@ -62,16 +62,20 @@ public class SOPCLassFilter extends AbstractProcessor {
         if (context.getProperty(FILTER_SOP_CLASS).isSet()) {
             String filterSopIuid = context.getProperty(FILTER_SOP_CLASS).evaluateAttributeExpressions(flowFile).getValue();
             if (filterSopIuid.equals("*")){
+                session.getProvenanceReporter().route(flowFile, REL_SUCCESS);
                 session.transfer(flowFile, REL_SUCCESS);
             }else{
                 String affectedSOPClassUID = flowFile.getAttribute("AffectedSOPClassUID");
                 if (affectedSOPClassUID.equalsIgnoreCase(filterSopIuid)){
+                    session.getProvenanceReporter().route(flowFile, REL_SUCCESS);
                     session.transfer(flowFile, REL_SUCCESS);
                 } else {
+                    session.getProvenanceReporter().route(flowFile, REL_FAILURE);
                     session.transfer(flowFile, REL_FAILURE);
                 }
             }
         }else{
+            session.getProvenanceReporter().route(flowFile, REL_FAILURE);
             session.transfer(flowFile, REL_FAILURE);
         }
     }

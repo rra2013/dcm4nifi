@@ -14,9 +14,7 @@ import org.dcm4che3.data.Tag;
 import org.rra.deidentify.GeneralAnonymizer;
 import org.rra.deidentify.model.DeidentifyModel;
 
-import java.io.BufferedOutputStream;
-import java.io.IOException;
-import java.io.OutputStream;
+import java.io.*;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
@@ -44,7 +42,7 @@ public class Deidentify extends AbstractProcessor {
             .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
             .build();
 
-    public static final PropertyDescriptor BOOLEAN = new PropertyDescriptor.Builder()
+   /* public static final PropertyDescriptor BOOLEAN = new PropertyDescriptor.Builder()
             .name("Pretty Print")
             .displayName("Pretty Print")
             .description("Apply pretty print formatting to the output.")
@@ -53,7 +51,7 @@ public class Deidentify extends AbstractProcessor {
             .defaultValue("false")
             .dependsOn(DEIDENT_MODEL)
             .build();
-
+*/
     public static final Relationship REL_SUCCESS = new Relationship.Builder()
             .name("success")
             .description("Success relationship of the de-identification process")
@@ -68,7 +66,7 @@ public class Deidentify extends AbstractProcessor {
 
     @Override
     protected void init(final ProcessorInitializationContext context) {
-        descriptors = List.of(DEIDENT_MODEL, BOOLEAN);
+        descriptors = List.of(DEIDENT_MODEL/*, BOOLEAN*/);
         relationships = Set.of(REL_SUCCESS, REL_FAILURE);
     }
 
@@ -98,8 +96,8 @@ public class Deidentify extends AbstractProcessor {
             AtomicReference<String> anonymSOPIUID = new AtomicReference("NO_UID");
             flowFile = session.write(flowFile, (in, out) -> {
                 try (OutputStream buffOut = new BufferedOutputStream(out)) {
-                    try {
-                        Attributes dcm = GeneralAnonymizer.anonymize(in, buffOut, deidentifyModel);
+                    try (InputStream buffIn = new BufferedInputStream(in)) {
+                        Attributes dcm = GeneralAnonymizer.anonymize(buffIn, buffOut, deidentifyModel);
                         String sopIUID = dcm.getString(Tag.SOPInstanceUID);
                         anonymSOPIUID.set(sopIUID);
                         log.debug(" + + + StudyInstanceUID: {}", dcm.getString(Tag.StudyInstanceUID));
@@ -108,11 +106,12 @@ public class Deidentify extends AbstractProcessor {
                     } catch (Exception e) {
                         throw new IOException(e);
                     }
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
+                } catch (Exception exception) {
+                    throw exception;
                 }
             });
             flowFile = session.putAttribute(flowFile, "AffectedSOPInstanceUID", anonymSOPIUID.get());
+            session.getProvenanceReporter().modifyContent(flowFile);
             session.transfer(flowFile, REL_SUCCESS);
         } catch (Exception e) {
             log.error(e.getMessage());

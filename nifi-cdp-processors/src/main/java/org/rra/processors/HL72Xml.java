@@ -18,6 +18,7 @@ import org.apache.nifi.annotation.documentation.Tags;
 import org.apache.nifi.annotation.documentation.UseCase;
 import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.flowfile.FlowFile;
+import org.apache.nifi.flowfile.attributes.CoreAttributes;
 import org.apache.nifi.processor.*;
 import org.apache.nifi.processor.exception.ProcessException;
 import org.eclipse.jetty.util.IO;
@@ -93,7 +94,8 @@ public class HL72Xml extends AbstractProcessor {
                     throw new RuntimeException(e);
                 }
             });
-            flowFile = session.putAttribute(flowFile, "mime.type", "application/xml");
+            flowFile = session.putAttribute(flowFile, CoreAttributes.MIME_TYPE.key(), "application/xml");
+            session.getProvenanceReporter().modifyContent(flowFile);
             session.transfer(flowFile, REL_SUCCESS);
         } catch (Exception e) {
             log.error(e.getMessage());
