@@ -23,6 +23,7 @@ import org.dcm4che3.io.DicomOutputStream;
 import org.dcm4che3.util.SafeClose;
 import org.rra.cfind.DcmFindScu;
 import org.rra.cstore.NifiStoreSCU;
+import org.rra.dcm.DcmUtils;
 
 import java.io.BufferedOutputStream;
 import java.io.IOException;
@@ -53,7 +54,7 @@ public class FindScu extends AbstractProcessor {
     public static final PropertyDescriptor REMOTE_HOST = new PropertyDescriptor.Builder()
             .name("remote-address")
             .displayName("Remote Address")
-            .description("The address of the Remote Store-SCP server.")
+            .description("The address of the Remote Find-SCP server.")
             .required(true)
             .defaultValue("")
             .expressionLanguageSupported(ExpressionLanguageScope.ENVIRONMENT)
@@ -63,7 +64,7 @@ public class FindScu extends AbstractProcessor {
     public static final PropertyDescriptor PORT = new PropertyDescriptor.Builder()
             .name("remote-port")
             .displayName("Remote Port")
-            .description("The Server Port of DICOM Store-SCP")
+            .description("The Server Port of DICOM Find-SCP")
             .required(true)
             .defaultValue("11112")
             .expressionLanguageSupported(ExpressionLanguageScope.ENVIRONMENT)
@@ -110,17 +111,7 @@ public class FindScu extends AbstractProcessor {
     private List<PropertyDescriptor> descriptors;
     private Set<Relationship> relationships;
 
-    private static void copyAttributesToOutput(Attributes attributes, BufferedOutputStream outputStream) {
-        try {
-            DicomOutputStream out = new DicomOutputStream(outputStream, UID.ExplicitVRLittleEndian);
-            try {
-                attributes.writeTo(out);
-            } finally {
-                SafeClose.close(out);
-            }
-        } catch (Exception e) {
-        }
-    }
+
 
     @Override
     protected void init(final ProcessorInitializationContext context) {
@@ -176,11 +167,11 @@ public class FindScu extends AbstractProcessor {
                 session.remove(flowFile);
             },attributes -> {
                 try {
-                    long t1 = System.nanoTime();
+                    final long t1 = System.nanoTime();
                     FlowFile qResItem = session.create();
                     try (OutputStream outputStream = session.write(qResItem)) {
                         try (BufferedOutputStream bos = new BufferedOutputStream(outputStream)) {
-                            copyAttributesToOutput(attributes, bos);
+                            DcmUtils.copyAttributesToOutput(attributes, bos);
                         }
                     } catch (SocketException socketException) {
                         log.error("Socket exception during data transfer", socketException);

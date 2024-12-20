@@ -9,3 +9,4 @@ org.rra.processors.SOPCLassFilter
 org.rra.processors.Dcm2Xml
 org.rra.processors.FindScu
 org.rra.processors.Dcm2Dcm
+org.rra.processors.MoveScu

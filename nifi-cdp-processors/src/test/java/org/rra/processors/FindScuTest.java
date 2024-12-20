@@ -29,6 +29,10 @@ public class FindScuTest {
 
     @Test
     public void testProcessorSuccess() {
+        if (!DICOM_INTEGRATION_TESTS){
+            log.info("Skipping test because DICOM INTEGRATION_TESTS");
+            return;
+        }
         log.info("$ $ $ $ Run FindScu $ $ $ $ $");
         testRunner.setValidateExpressionUsage(false);
         //Patient/study level
@@ -59,6 +63,10 @@ public class FindScuTest {
 
     @Test
     public void testProcessorFailed(){
+        if (!DICOM_INTEGRATION_TESTS){
+            log.info("Skipping test because DICOM INTEGRATION_TESTS");
+            return;
+        }
         log.info("$ $ $ $ Run FindScu $ $ $ $ $");
         testRunner.setValidateExpressionUsage(false);
         //Error test
@@ -73,6 +81,10 @@ public class FindScuTest {
 
     @Test
     public void testSCUPatStudy() throws Exception {
+        if (!DICOM_INTEGRATION_TESTS){
+            log.info("Skipping test because DICOM INTEGRATION_TESTS");
+            return;
+        }
         DcmFindScu findSCU = new DcmFindScu("FIND", DICOM_SERVER_AET, DICOM_SERVER_HOST, DICOM_SERVER_PORT, QUERY_LEVEL_PATIENT_STUDY);
         //Pat/Study level
         final List<Attributes> resultSet = new ArrayList<>();
@@ -103,6 +115,10 @@ public class FindScuTest {
     }
     @Test
     public void testSeriesLevel() throws Exception {
+        if (!DICOM_INTEGRATION_TESTS){
+            log.info("Skipping test because DICOM INTEGRATION_TESTS");
+            return;
+        }
         DcmFindScu findSCU = new DcmFindScu("FIND", DICOM_SERVER_AET, DICOM_SERVER_HOST, DICOM_SERVER_PORT, QUERY_LEVEL_SERIES);
         //Series level
         final List<Attributes> resultSet = new ArrayList<>();
@@ -120,6 +136,10 @@ public class FindScuTest {
 
     @Test
     public void testImageLevel() throws Exception {
+        if (!DICOM_INTEGRATION_TESTS){
+            log.info("Skipping test because DICOM INTEGRATION_TESTS");
+            return;
+        }
         DcmFindScu findSCU = new DcmFindScu("FIND", DICOM_SERVER_AET, DICOM_SERVER_HOST, DICOM_SERVER_PORT, QUERY_LEVEL_IMAGE);
         //Image level
         final List<Attributes> resultSet = new ArrayList<>();
