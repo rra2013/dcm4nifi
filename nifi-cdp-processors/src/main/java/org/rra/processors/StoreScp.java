@@ -59,7 +59,7 @@ public class StoreScp extends AbstractSessionFactoryProcessor {
             .displayName("Listening Port")
             .description("The Port to listen on for incoming connections. On Linux, root privileges are required to use port numbers below 1024.")
             .required(true)
-            .defaultValue("11115")
+            .defaultValue("11113")
             .expressionLanguageSupported(ExpressionLanguageScope.ENVIRONMENT)
             .addValidator(StandardValidators.PORT_VALIDATOR)
             .build();

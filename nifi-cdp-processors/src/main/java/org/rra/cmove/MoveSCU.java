@@ -1,6 +1,5 @@
 package org.rra.cmove;
 
-import lombok.extern.log4j.Log4j2;
 import lombok.extern.slf4j.Slf4j;
 import org.dcm4che3.data.*;
 import org.dcm4che3.net.*;
@@ -70,14 +69,19 @@ public class MoveSCU extends Device {
 
     }
 
-    public void moveSeries(String studyIUID, String seriesIUID, IMoveComplete moveComplete, IMoveHasErrors errorHandler) throws Exception {
+    public void moveSeries(String studyIUID, String seriesIUID, MoveComplete moveComplete, Response responseHandler, MoveHasErrors errorHandler) throws Exception {
         addKey(Tag.StudyInstanceUID, studyIUID);
         addKey(Tag.SeriesInstanceUID, seriesIUID);
         addRetrieveLevel("SERIES");
-        runMoveScu(moveComplete, errorHandler);
+        runMoveScu(moveComplete, errorHandler, responseHandler);
+    }
+    public void moveStudy(String studyIUID, MoveComplete moveComplete, Response responseHandler, MoveHasErrors errorHandler) throws Exception {
+        addKey(Tag.StudyInstanceUID, studyIUID);
+        addRetrieveLevel("STUDY");
+        runMoveScu(moveComplete, errorHandler, responseHandler);
     }
 
-    private void runMoveScu(final IMoveComplete moveComplete, final IMoveHasErrors errorHandler) throws Exception {
+    private void runMoveScu(final MoveComplete moveComplete, final MoveHasErrors errorHandler, Response responseHandler) throws Exception {
         try {
             ExecutorService executorService = Executors.newSingleThreadExecutor();
             ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
@@ -85,15 +89,15 @@ public class MoveSCU extends Device {
             setScheduledExecutor(scheduledExecutorService);
             try {
                 open();
-                retrieve(moveComplete, errorHandler);
+                retrieve(keys, moveComplete, errorHandler, responseHandler);
             } finally {
                 close();
                 executorService.shutdown();
                 scheduledExecutorService.shutdown();
             }
-        } catch (Exception e) {
-            log.info("Error: " + e.getMessage());
-            throw e;
+        } catch (Exception exception) {
+            log.info("Error: " + exception.getMessage());
+            throw exception;
         }
     }
 
@@ -161,23 +165,28 @@ public class MoveSCU extends Device {
 //        retrieve(attrs);
 //    }
 
-    private void retrieve(final IMoveComplete moveComplete, final IMoveHasErrors erroHandler) throws IOException, InterruptedException {
-        retrieve(keys, moveComplete, erroHandler);
+    private void retrieve(final MoveComplete moveComplete, final MoveHasErrors erroHandler, final Response responseHandler) throws IOException, InterruptedException {
+        retrieve(this.keys, moveComplete, erroHandler, responseHandler);
     }
 
     private final class MoveDimseRSPHandler extends DimseRSPHandler {
-        final IMoveHasErrors errorHandler;
-        final IMoveComplete moveComplete;
-        public MoveDimseRSPHandler(int msgId, IMoveHasErrors erroHandler, IMoveComplete moveComplete) {
+        final MoveHasErrors errorHandler;
+        final MoveComplete moveComplete;
+        final Response responseHandler;
+        public MoveDimseRSPHandler(int msgId, MoveHasErrors erroHandler, MoveComplete moveComplete, Response responseHandler) {
             super(msgId);
             this.errorHandler = erroHandler;
             this.moveComplete = moveComplete;
+            this.responseHandler = responseHandler;
         }
 
         @Override
         public void onDimseRSP(Association as, Attributes cmd, Attributes data) {
             super.onDimseRSP(as, cmd, data);
             int status = cmd.getInt(Tag.Status, -1);
+            if (null != responseHandler){
+                responseHandler.onResponse(cmd, status);
+            }
             if (!Status.isPending(status) && (status != Status.Success)) {
                 log.debug("##################### cmd = {}", cmd);
                 if (null != errorHandler){
@@ -189,11 +198,12 @@ public class MoveSCU extends Device {
                     }
                 }
             }else if (status == Status.Success){
-                moveComplete.moveComplete(keys.getString(Tag.StudyInstanceUID), keys.getString(Tag.SeriesInstanceUID));
+                moveComplete.moveComplete();
             }
         }
     }
-    private void retrieve(Attributes keys, final IMoveComplete moveComplete, final IMoveHasErrors erroHandler) throws IOException, InterruptedException {
+    
+    private void retrieve(Attributes keys, final MoveComplete moveComplete, final MoveHasErrors erroHandler, final Response responseHandler) throws IOException, InterruptedException {
         /*final DimseRSPHandler rspHandler = new DimseRSPHandler(as.nextMessageID()) {
             @Override
             public void onDimseRSP(Association as, Attributes cmd, Attributes data) {
@@ -201,7 +211,7 @@ public class MoveSCU extends Device {
             }
         };
         */
-        MoveDimseRSPHandler rspHandler = new MoveDimseRSPHandler(as.nextMessageID(), erroHandler, moveComplete);
+        MoveDimseRSPHandler rspHandler = new MoveDimseRSPHandler(as.nextMessageID(), erroHandler, moveComplete, responseHandler);
 
         as.cmove(model.cuid, priority, keys, null, destination, rspHandler);
 

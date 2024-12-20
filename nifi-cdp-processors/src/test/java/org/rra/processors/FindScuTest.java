@@ -14,8 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.rra.cfind.DcmFindScu.*;
-import static org.rra.processors.DataForTest.DICOM_SERVER_HOST;
-import static org.rra.processors.DataForTest.DICOM_SERVER_PORT;
+import static org.rra.processors.DataForTest.*;
 import static org.rra.processors.FindScu.*;
 
 @Slf4j
@@ -74,7 +73,7 @@ public class FindScuTest {
 
     @Test
     public void testSCUPatStudy() throws Exception {
-        DcmFindScu findSCU = new DcmFindScu("FIND", "DCM4CHEE", "DESKTOP-71BJVR0", 11112, QUERY_LEVEL_PATIENT_STUDY);
+        DcmFindScu findSCU = new DcmFindScu("FIND", DICOM_SERVER_AET, DICOM_SERVER_HOST, DICOM_SERVER_PORT, QUERY_LEVEL_PATIENT_STUDY);
         //Pat/Study level
         final List<Attributes> resultSet = new ArrayList<>();
 
@@ -88,7 +87,7 @@ public class FindScuTest {
         });
         Assertions.assertEquals(1, resultSet.size());
 
-        findSCU = new DcmFindScu("FIND", "DCM4CHEE", "DESKTOP-71BJVR0", 11112, QUERY_LEVEL_PATIENT_STUDY);
+        findSCU = new DcmFindScu("FIND", DICOM_SERVER_AET, DICOM_SERVER_HOST, DICOM_SERVER_PORT, QUERY_LEVEL_PATIENT_STUDY);
         //Pat/Study level
         final List<Attributes> res = new ArrayList<>();
         findSCU.getQueryFilter().setPatientID("56757");
@@ -104,7 +103,7 @@ public class FindScuTest {
     }
     @Test
     public void testSeriesLevel() throws Exception {
-        DcmFindScu findSCU = new DcmFindScu("FIND", "DCM4CHEE", "DESKTOP-71BJVR0", 11112, QUERY_LEVEL_SERIES);
+        DcmFindScu findSCU = new DcmFindScu("FIND", DICOM_SERVER_AET, DICOM_SERVER_HOST, DICOM_SERVER_PORT, QUERY_LEVEL_SERIES);
         //Series level
         final List<Attributes> resultSet = new ArrayList<>();
         findSCU.getQueryFilter().setPatientID("56757");
@@ -121,7 +120,7 @@ public class FindScuTest {
 
     @Test
     public void testImageLevel() throws Exception {
-        DcmFindScu findSCU = new DcmFindScu("FIND", "DCM4CHEE", "DESKTOP-71BJVR0", 11112, QUERY_LEVEL_IMAGE);
+        DcmFindScu findSCU = new DcmFindScu("FIND", DICOM_SERVER_AET, DICOM_SERVER_HOST, DICOM_SERVER_PORT, QUERY_LEVEL_IMAGE);
         //Image level
         final List<Attributes> resultSet = new ArrayList<>();
         findSCU.getQueryFilter().setPatientID("56757");
@@ -136,7 +135,7 @@ public class FindScuTest {
         Assertions.assertEquals(300, resultSet.size());
 
         // For a series inside a study
-        findSCU = new DcmFindScu("FIND", "DCM4CHEE", "DESKTOP-71BJVR0", 11112, QUERY_LEVEL_IMAGE);
+        findSCU = new DcmFindScu("FIND", DICOM_SERVER_AET, DICOM_SERVER_HOST, DICOM_SERVER_PORT, QUERY_LEVEL_IMAGE);
         //Image level
         final List<Attributes> res = new ArrayList<>();
         findSCU.getQueryFilter().setPatientID("56757");

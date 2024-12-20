@@ -50,7 +50,7 @@ public class StoreScpTest {
             dcmObjects.forEach(bytes -> {
                 try (ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(bytes)) {
                     try (BufferedInputStream bis = new BufferedInputStream(byteArrayInputStream)) {
-                        new NifiStoreSCU("dev-test-vm1", 11115, "NIFI_SCU", "DCM4NIFI", bis);
+                        new NifiStoreSCU("localhost", 11113, "NIFI_SCU", "DCM4NIFI", bis);
                     }
                 } catch (Exception e) {
 

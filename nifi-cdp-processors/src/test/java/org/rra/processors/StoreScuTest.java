@@ -38,14 +38,14 @@ public class StoreScuTest {
         testSCU.setValidateExpressionUsage(false);
         testSCP.setValidateExpressionUsage(false);
         //
-        testSCP.setProperty(StoreScp.PORT, "11112");
+        testSCP.setProperty(StoreScp.PORT, "11114");
         testSCP.enqueue("TEST");
         testSCP.run(1, false, true);
         log.info("$ $ $ $ Run testSCP $ $ $ $ $");
         dcmObjects.forEach(dcmFileArray -> {
             HashMap<String, String> attr = new HashMap<>();
             attr.put("CallingAET", "TEST_RUNNER");
-            testSCU.setProperty(StoreScu.PORT, "11112");
+            testSCU.setProperty(StoreScu.PORT, "11114");
             testSCU.enqueue(dcmFileArray, attr);
             testSCU.run();
             log.info("Run with size {}", dcmFileArray.length);
