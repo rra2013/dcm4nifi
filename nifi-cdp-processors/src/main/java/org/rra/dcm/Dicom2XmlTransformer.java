@@ -18,7 +18,7 @@ import java.io.OutputStream;
 
 import static org.dcm4che3.io.DicomInputStream.IncludeBulkData;
 
-public class Dcm2XmlTransformer {
+public class Dicom2XmlTransformer {
 
     private static final String XML_1_0 = "1.0";
     private static final String xsltURL = null;

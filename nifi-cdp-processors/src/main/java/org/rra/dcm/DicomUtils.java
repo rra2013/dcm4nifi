@@ -7,7 +7,7 @@ import org.dcm4che3.util.SafeClose;
 
 import java.io.BufferedOutputStream;
 
-public class DcmUtils {
+public class DicomUtils {
     public static void copyAttributesToOutput(Attributes attributes, BufferedOutputStream outputStream) {
         try {
             DicomOutputStream out = new DicomOutputStream(outputStream, UID.ExplicitVRLittleEndian);

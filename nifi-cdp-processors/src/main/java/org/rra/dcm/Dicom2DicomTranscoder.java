@@ -6,16 +6,11 @@ import org.dcm4che3.io.DicomEncodingOptions;
 import org.dcm4che3.util.Property;
 
 import java.io.*;
-import java.nio.file.Files;
-import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.Executor;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 @Slf4j
-public class Dcm2DcmTranscoder {
+public class Dicom2DicomTranscoder {
     private static DicomEncodingOptions encOpts = DicomEncodingOptions.DEFAULT;
     private static final List<Property> params = new ArrayList<>();
 

@@ -17,13 +17,8 @@ import org.apache.nifi.flowfile.attributes.CoreAttributes;
 import org.apache.nifi.processor.*;
 import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.util.StandardValidators;
-import org.dcm4che3.data.Attributes;
-import org.dcm4che3.data.UID;
-import org.dcm4che3.io.DicomOutputStream;
-import org.dcm4che3.util.SafeClose;
 import org.rra.cfind.DcmFindScu;
-import org.rra.cstore.NifiStoreSCU;
-import org.rra.dcm.DcmUtils;
+import org.rra.dcm.DicomUtils;
 
 import java.io.BufferedOutputStream;
 import java.io.IOException;
@@ -171,7 +166,7 @@ public class FindScu extends AbstractProcessor {
                     FlowFile qResItem = session.create();
                     try (OutputStream outputStream = session.write(qResItem)) {
                         try (BufferedOutputStream bos = new BufferedOutputStream(outputStream)) {
-                            DcmUtils.copyAttributesToOutput(attributes, bos);
+                            DicomUtils.copyAttributesToOutput(attributes, bos);
                         }
                     } catch (SocketException socketException) {
                         log.error("Socket exception during data transfer", socketException);

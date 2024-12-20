@@ -15,7 +15,7 @@ import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.processor.*;
 import org.apache.nifi.processor.exception.ProcessException;
 import org.dcm4che3.data.UID;
-import org.rra.dcm.Dcm2DcmTranscoder;
+import org.rra.dcm.Dicom2DicomTranscoder;
 
 import java.io.*;
 import java.util.List;
@@ -43,7 +43,7 @@ import java.util.concurrent.TimeUnit;
 @SideEffectFree
 @SystemResourceConsideration(resource = SystemResource.CPU)
 @Slf4j
-@Tags({"DICOM", "Find-SCU", "CDP"})
+@Tags({"DICOM", "Dcm2Dcm", "CDP"})
 @CapabilityDescription("Transcode one DICOM Object according the specified Transfer Syntax")
 @UseCase(description = "Compress or Uncompress DICOM Objects.",
         inputRequirement = InputRequirement.Requirement.INPUT_REQUIRED)
@@ -102,7 +102,7 @@ public class Dcm2Dcm extends AbstractProcessor {
             flowFile = session.write(flowFile,(in, out) -> {
                 try (OutputStream buffOut = new BufferedOutputStream(out)) {
                     try(InputStream buffIn = new BufferedInputStream(in)){
-                        Dcm2DcmTranscoder.transcode(buffIn, buffOut, transferSyntax);
+                        Dicom2DicomTranscoder.transcode(buffIn, buffOut, transferSyntax);
                     }catch (Exception exception) {
                         throw new IOException(exception);
                     }

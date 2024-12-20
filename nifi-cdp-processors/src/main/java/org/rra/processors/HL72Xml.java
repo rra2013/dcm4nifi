@@ -94,6 +94,8 @@ public class HL72Xml extends AbstractProcessor {
                     throw new RuntimeException(e);
                 }
             });
+            String fileName = flowFile.getAttribute(CoreAttributes.FILENAME.key()) + ".xml";
+            flowFile = session.putAttribute(flowFile, CoreAttributes.FILENAME.key(), fileName);
             flowFile = session.putAttribute(flowFile, CoreAttributes.MIME_TYPE.key(), "application/xml");
             session.getProvenanceReporter().modifyContent(flowFile);
             session.transfer(flowFile, REL_SUCCESS);

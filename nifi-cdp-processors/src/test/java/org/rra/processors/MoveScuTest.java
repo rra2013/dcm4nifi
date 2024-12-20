@@ -6,20 +6,16 @@ import org.apache.nifi.util.TestRunner;
 import org.apache.nifi.util.TestRunners;
 import org.dcm4che3.data.Attributes;
 import org.dcm4che3.data.Tag;
-import org.dcm4che3.data.UID;
 import org.dcm4che3.data.VR;
-import org.dcm4che3.io.DicomOutputStream;
-import org.dcm4che3.util.SafeClose;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.rra.cmove.NifiMoveSCU;
-import org.rra.dcm.DcmUtils;
 
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.util.List;
 
-import static org.rra.dcm.DcmUtils.*;
+import static org.rra.dcm.DicomUtils.*;
 import static org.rra.processors.DataForTest.*;
 import static org.rra.processors.MoveScu.*;
 
