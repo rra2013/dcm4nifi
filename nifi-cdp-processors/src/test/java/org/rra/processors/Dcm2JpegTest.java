@@ -22,7 +22,7 @@ import static org.rra.processors.Dcm2Jpeg.*;
 
 @Slf4j
 public class Dcm2JpegTest {
-    private static final List<byte[]> dcmObjects = new ArrayList<>();
+    private static List<byte[]> dcmObjects = new ArrayList<>();
 
     private TestRunner testRunner;
 
@@ -33,8 +33,8 @@ public class Dcm2JpegTest {
 
     @BeforeAll
     public static void readData() {
-        //Read DICOM Files
-        Utils.readDicomFiles(dcmObjects, DataForTest.DICOM_PATH);
+        //Get DICOM Files
+        dcmObjects = DataForTest.DCMOBJECTS;
         Assertions.assertTrue(dcmObjects.size() > 0);
     }
 

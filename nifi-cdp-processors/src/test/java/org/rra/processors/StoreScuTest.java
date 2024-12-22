@@ -16,15 +16,15 @@ import java.util.List;
 @Slf4j
 public class StoreScuTest {
 
-    private static final List<byte[]> dcmObjects = new ArrayList<>();
+    private static List<byte[]> dcmObjects = new ArrayList<>();
 
     private TestRunner testSCU;
     private TestRunner testSCP;
     private StoreScp proc;
     @BeforeAll
     public static void readData() {
-        //Read DICOM Files
-        Utils.readDicomFiles(dcmObjects, DataForTest.DICOM_PATH);
+        //Get DICOM Files
+        dcmObjects = DataForTest.DCMOBJECTS;
         Assertions.assertTrue(dcmObjects.size() > 0);
     }
     @BeforeEach

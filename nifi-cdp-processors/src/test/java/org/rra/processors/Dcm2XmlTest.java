@@ -22,11 +22,11 @@ import java.util.List;
 @Slf4j
 public class Dcm2XmlTest {
 
-    private static final List<byte[]> dcmObjects = new ArrayList<>();
+    private static List<byte[]> dcmObjects = new ArrayList<>();
     @BeforeAll
     public static void readData() {
-        //Read DICOM Files
-        Utils.readDicomFiles(dcmObjects, DataForTest.DICOM_PATH);
+        //Get DICOM Files
+        dcmObjects = DataForTest.DCMOBJECTS;
         Assertions.assertTrue(dcmObjects.size() > 0);
     }
 

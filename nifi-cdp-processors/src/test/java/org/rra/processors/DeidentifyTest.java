@@ -20,18 +20,17 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
-import static org.rra.processors.Utils.readDicomFiles;
 
 @Slf4j
 public class DeidentifyTest {
 
-    private static final List<byte[]> dcmObjects = new ArrayList<>();
+    private static List<byte[]> dcmObjects = new ArrayList<>();
     private TestRunner testRunner;
 
     @BeforeAll
     public static void readData() {
-        //Read DICOM Files
-        readDicomFiles(dcmObjects, DataForTest.DICOM_PATH);
+        //Get DICOM Files
+        dcmObjects = DataForTest.DCMOBJECTS;
         Assertions.assertTrue(dcmObjects.size() > 0);
     }
 
