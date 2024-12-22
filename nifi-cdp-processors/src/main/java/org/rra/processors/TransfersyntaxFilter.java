@@ -24,29 +24,29 @@ import java.util.Set;
 @SupportsBatching
 @InputRequirement(InputRequirement.Requirement.INPUT_REQUIRED)
 @SideEffectFree
-@Tags({"CDP", "DICOM", "router"})
-@CapabilityDescription("A DICOM Router based on dcm4che. Will route on CALLING AET during the NIFI Workflows")
-@UseCase(description = "DICOM Router can be used for routing of DICOM 3 Objects to remote destinations.",
+@Tags({"CDP", "DICOM", "filter", "Transfer-syntax"})
+@CapabilityDescription("A Transfer-syntax Filter. Will route on Transfer-syntax during the NIFI Workflows.")
+@UseCase(description = "DICOM Transfer-syntax filter can be used for routing of selected Transfer-syntax to other processors.",
         inputRequirement = InputRequirement.Requirement.INPUT_REQUIRED)
 
-public class DICOMRouter extends AbstractProcessor {
-    public static final PropertyDescriptor ROUTE_AET = new PropertyDescriptor
+public class TransfersyntaxFilter extends AbstractProcessor {
+    public static final PropertyDescriptor TRANSFER_SYNTAX = new PropertyDescriptor
             .Builder()
-            .name("RouteAET")
-            .displayName("Route Calling AET")
-            .description("The Calling AET to Route")
+            .name("transfer-syntax")
+            .displayName("Transfer-Syntax")
+            .description("The The Transfer-syntax that will be filtered. A '*' will bypass the object")
             .required(true)
-            .defaultValue("")
+            .defaultValue("*")
             .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
             .build();
 
     public static final Relationship REL_SUCCESS = new Relationship.Builder()
             .name("success")
-            .description("Success relationship of the routing process")
+            .description("Success relationship of the filtering process")
             .build();
     public static final Relationship REL_FAILURE = new Relationship.Builder()
             .name("failure")
-            .description("Routing failed.").build();
+            .description("Filter failed.").build();
 
     private List<PropertyDescriptor> descriptors;
 
@@ -58,17 +58,23 @@ public class DICOMRouter extends AbstractProcessor {
         if (flowFile == null) {
             return;
         }
-        if (context.getProperty(ROUTE_AET).isSet()) {
-            String routeAET = context.getProperty(ROUTE_AET).evaluateAttributeExpressions(flowFile).getValue();
-            String callingAET = flowFile.getAttribute("CallingAET");
-            if (routeAET.equalsIgnoreCase(callingAET)) {
+
+        if (context.getProperty(TRANSFER_SYNTAX).isSet()) {
+            String filterTSyntax = context.getProperty(TRANSFER_SYNTAX).evaluateAttributeExpressions(flowFile).getValue();
+            if (filterTSyntax.equals("*")){
                 session.getProvenanceReporter().route(flowFile, REL_SUCCESS);
                 session.transfer(flowFile, REL_SUCCESS);
-            } else {
-                session.getProvenanceReporter().route(flowFile, REL_FAILURE);
-                session.transfer(flowFile, REL_FAILURE);
+            }else{
+                String transferSyntax = flowFile.getAttribute("TransferSyntax");
+                if (transferSyntax.equalsIgnoreCase(filterTSyntax)){
+                    session.getProvenanceReporter().route(flowFile, REL_SUCCESS);
+                    session.transfer(flowFile, REL_SUCCESS);
+                } else {
+                    session.getProvenanceReporter().route(flowFile, REL_FAILURE);
+                    session.transfer(flowFile, REL_FAILURE);
+                }
             }
-        } else {
+        }else{
             session.getProvenanceReporter().route(flowFile, REL_FAILURE);
             session.transfer(flowFile, REL_FAILURE);
         }
@@ -76,7 +82,7 @@ public class DICOMRouter extends AbstractProcessor {
 
     @Override
     protected void init(final ProcessorInitializationContext context) {
-        descriptors = List.of(ROUTE_AET);
+        descriptors = List.of(TRANSFER_SYNTAX);
         relationships = Set.of(REL_SUCCESS, REL_FAILURE);
     }
 
@@ -93,18 +99,17 @@ public class DICOMRouter extends AbstractProcessor {
     @Override
     protected Collection<ValidationResult> customValidate(ValidationContext context) {
         List<ValidationResult> results = new ArrayList<>(3);
-        validateRouteAet(context, results);
+        validateSOPClassUID(context, results);
         return results;
     }
 
-    private void validateRouteAet(ValidationContext context, Collection<ValidationResult> validationResults) {
-        String bindAddress = context.getProperty(ROUTE_AET).evaluateAttributeExpressions().getValue();
-        if (null == bindAddress || bindAddress.equals("")) {
-            String explanation = String.format("'%s' is unknown", ROUTE_AET.getDisplayName());
-            validationResults.add(createValidationResult(ROUTE_AET.getDisplayName(), explanation));
+    private void validateSOPClassUID(ValidationContext context, Collection<ValidationResult> validationResults) {
+        String sopClass = context.getProperty(TRANSFER_SYNTAX).evaluateAttributeExpressions().getValue();
+        if (null == sopClass || sopClass.equals("")) {
+            String explanation = String.format("'%s' is unknown", TRANSFER_SYNTAX.getDisplayName());
+            validationResults.add(createValidationResult(TRANSFER_SYNTAX.getDisplayName(), explanation));
         }
     }
-
     private ValidationResult createValidationResult(String subject, String explanation) {
         return new ValidationResult.Builder().subject(subject).valid(false).explanation(explanation).build();
     }

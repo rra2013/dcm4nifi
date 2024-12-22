@@ -24,7 +24,7 @@ import java.util.Set;
 @SupportsBatching
 @InputRequirement(InputRequirement.Requirement.INPUT_REQUIRED)
 @SideEffectFree
-@Tags({"CDP", "DICOM", "filter"})
+@Tags({"CDP", "DICOM", "filter", "SOP Class"})
 @CapabilityDescription("A DICOM SOP Class Filter. Will route on Affected SOP Class UID during the NIFI Workflows")
 @UseCase(description = "DICOM SOP Class Filter can be used for routing of selected SOP Classes to other processors.",
         inputRequirement = InputRequirement.Requirement.INPUT_REQUIRED)
@@ -104,8 +104,8 @@ public class SOPCLassFilter extends AbstractProcessor {
     }
 
     private void validateSOPClassUID(ValidationContext context, Collection<ValidationResult> validationResults) {
-        String bindAddress = context.getProperty(FILTER_SOP_CLASS).evaluateAttributeExpressions().getValue();
-        if (null == bindAddress || bindAddress.equals("")) {
+        String sopClass = context.getProperty(FILTER_SOP_CLASS).evaluateAttributeExpressions().getValue();
+        if (null == sopClass || sopClass.equals("")) {
             String explanation = String.format("'%s' is unknown", FILTER_SOP_CLASS.getDisplayName());
             validationResults.add(createValidationResult(FILTER_SOP_CLASS.getDisplayName(), explanation));
         }
