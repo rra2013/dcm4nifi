@@ -8,12 +8,12 @@ import org.dcm4che3.data.Attributes;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.rra.cfind.DcmFindScu;
+import org.rra.cfind.NifiFindScu;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.rra.cfind.DcmFindScu.*;
+import static org.rra.cfind.NifiFindScu.*;
 import static org.rra.processors.DataForTest.*;
 import static org.rra.processors.FindScu.*;
 
@@ -85,7 +85,7 @@ public class FindScuTest {
             log.info("Skipping test because DICOM INTEGRATION_TESTS");
             return;
         }
-        DcmFindScu findSCU = new DcmFindScu("FIND", DICOM_SERVER_AET, DICOM_SERVER_HOST, DICOM_SERVER_PORT, QUERY_LEVEL_PATIENT_STUDY);
+        NifiFindScu findSCU = new NifiFindScu("FIND", DICOM_SERVER_AET, DICOM_SERVER_HOST, DICOM_SERVER_PORT, QUERY_LEVEL_PATIENT_STUDY);
         //Pat/Study level
         final List<Attributes> resultSet = new ArrayList<>();
 
@@ -99,7 +99,7 @@ public class FindScuTest {
         });
         Assertions.assertEquals(1, resultSet.size());
 
-        findSCU = new DcmFindScu("FIND", DICOM_SERVER_AET, DICOM_SERVER_HOST, DICOM_SERVER_PORT, QUERY_LEVEL_PATIENT_STUDY);
+        findSCU = new NifiFindScu("FIND", DICOM_SERVER_AET, DICOM_SERVER_HOST, DICOM_SERVER_PORT, QUERY_LEVEL_PATIENT_STUDY);
         //Pat/Study level
         final List<Attributes> res = new ArrayList<>();
         findSCU.getQueryFilter().setPatientID("56757");
@@ -119,7 +119,7 @@ public class FindScuTest {
             log.info("Skipping test because DICOM INTEGRATION_TESTS");
             return;
         }
-        DcmFindScu findSCU = new DcmFindScu("FIND", DICOM_SERVER_AET, DICOM_SERVER_HOST, DICOM_SERVER_PORT, QUERY_LEVEL_SERIES);
+        NifiFindScu findSCU = new NifiFindScu("FIND", DICOM_SERVER_AET, DICOM_SERVER_HOST, DICOM_SERVER_PORT, QUERY_LEVEL_SERIES);
         //Series level
         final List<Attributes> resultSet = new ArrayList<>();
         findSCU.getQueryFilter().setPatientID("56757");
@@ -140,7 +140,7 @@ public class FindScuTest {
             log.info("Skipping test because DICOM INTEGRATION_TESTS");
             return;
         }
-        DcmFindScu findSCU = new DcmFindScu("FIND", DICOM_SERVER_AET, DICOM_SERVER_HOST, DICOM_SERVER_PORT, QUERY_LEVEL_IMAGE);
+        NifiFindScu findSCU = new NifiFindScu("FIND", DICOM_SERVER_AET, DICOM_SERVER_HOST, DICOM_SERVER_PORT, QUERY_LEVEL_IMAGE);
         //Image level
         final List<Attributes> resultSet = new ArrayList<>();
         findSCU.getQueryFilter().setPatientID("56757");
@@ -155,7 +155,7 @@ public class FindScuTest {
         Assertions.assertEquals(300, resultSet.size());
 
         // For a series inside a study
-        findSCU = new DcmFindScu("FIND", DICOM_SERVER_AET, DICOM_SERVER_HOST, DICOM_SERVER_PORT, QUERY_LEVEL_IMAGE);
+        findSCU = new NifiFindScu("FIND", DICOM_SERVER_AET, DICOM_SERVER_HOST, DICOM_SERVER_PORT, QUERY_LEVEL_IMAGE);
         //Image level
         final List<Attributes> res = new ArrayList<>();
         findSCU.getQueryFilter().setPatientID("56757");

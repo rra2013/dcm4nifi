@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.rra.dcm.DicomDataReader;
+import org.rra.dcm.DicomUtils;
 import org.rra.deidentify.model.DeidentifyModel;
 
 import java.io.BufferedInputStream;
@@ -65,19 +66,12 @@ public class DeidentifyTest {
         List<MockFlowFile> success = testRunner.getFlowFilesForRelationship(Deidentify.REL_SUCCESS);
         success.forEach(mockFlowFile -> {
             byte[] readAnonym = mockFlowFile.toByteArray();
-            try (ByteArrayInputStream ba = new ByteArrayInputStream(readAnonym)) {
-                try (BufferedInputStream bif = new BufferedInputStream(ba)) {
-                    DicomDataReader data = new DicomDataReader(bif, true);
-                    Attributes dcm = data.getAttributes();
-                    log.info(" + + + SOPInstanceUID: {}", dcm.getString(Tag.SOPInstanceUID));
-                    Sequence sequence = dcm.getSequence(Tag.DeidentificationMethodCodeSequence);
-                    Assertions.assertNotNull(sequence);
-                    log.debug("SEQ Size: {}", sequence.size());
-                    //sequence.forEach(attributes -> log.info("SEQ: {}", attributes));
-                }
-            } catch (Exception e) {
-                log.error(e.getMessage());
-            }
+            Attributes dcm = DicomUtils.byteArrayToAttributes(readAnonym);
+            log.info(" + + + SOPInstanceUID: {}", dcm.getString(Tag.SOPInstanceUID));
+            Sequence sequence = dcm.getSequence(Tag.DeidentificationMethodCodeSequence);
+            Assertions.assertNotNull(sequence);
+            log.debug("SEQ Size: {}", sequence.size());
+            //sequence.forEach(attributes -> log.info("SEQ: {}", attributes));
         });
         log.info("Test De-Identify Processor OK. {} Files were de-identified.", success.size());
         List<MockFlowFile> error = testRunner.getFlowFilesForRelationship(Deidentify.REL_FAILURE);

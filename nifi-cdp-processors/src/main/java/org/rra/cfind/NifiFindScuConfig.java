@@ -1,6 +1,6 @@
 package org.rra.cfind;
 
-public class DcmFindSCUConfig {
+public class NifiFindScuConfig {
     public enum FIND_LEVEL{
         PATIENT,
         STUDY,

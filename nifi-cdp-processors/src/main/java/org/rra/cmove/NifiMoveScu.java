@@ -13,7 +13,7 @@ import java.security.GeneralSecurityException;
 import java.util.concurrent.*;
 
 @Slf4j
-public class NifiMoveSCU extends Device {
+public class NifiMoveScu extends Device {
     private static final int[] DEF_IN_FILTER = {Tag.SOPInstanceUID, Tag.StudyInstanceUID, Tag.SeriesInstanceUID};
     private static final String[] IVR_LE_FIRST = {
             UID.ImplicitVRLittleEndian,
@@ -35,7 +35,7 @@ public class NifiMoveSCU extends Device {
     private ScheduledFuture<?> scheduledCancel;
     private ScheduledFuture<?> scheduledOnError;
 
-    public NifiMoveSCU(String host, int port, String callingAET, String calledAET, String moveAET) {
+    public NifiMoveScu(String host, int port, String callingAET, String calledAET, String moveAET) {
         super("movescu");
         ae = new ApplicationEntity(callingAET);
         addConnection(conn);

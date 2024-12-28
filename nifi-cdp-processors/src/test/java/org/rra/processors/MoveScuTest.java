@@ -9,7 +9,7 @@ import org.dcm4che3.data.Tag;
 import org.dcm4che3.data.VR;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.rra.cmove.NifiMoveSCU;
+import org.rra.cmove.NifiMoveScu;
 
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
@@ -64,14 +64,14 @@ public class MoveScuTest {
 
     //@Test
     public void testSCUMoveSeries() throws Exception {
-        NifiMoveSCU nifiMoveSCU = new NifiMoveSCU(DICOM_SERVER_HOST, DICOM_SERVER_PORT, "MOVE_SCU", DICOM_SERVER_AET, DICOM_SERVER_MOVE_AET);
+        NifiMoveScu nifiMoveSCU = new NifiMoveScu(DICOM_SERVER_HOST, DICOM_SERVER_PORT, "MOVE_SCU", DICOM_SERVER_AET, DICOM_SERVER_MOVE_AET);
         String studyInstanceUID = "1.2.840.113845.11.1000000001900555490.20160718102042.2434233";
         String seriesInstanceUID = "1.3.12.2.1107.5.2.19.45819.2016071811120879334462944.0.0.0";
         nifiMoveSCU.moveSeries(studyInstanceUID, seriesInstanceUID);
     }
     //@Test
     public void testSCUMoveStudy() throws Exception {
-        NifiMoveSCU nifiMoveSCU = new NifiMoveSCU(DICOM_SERVER_HOST, DICOM_SERVER_PORT, "MOVE_SCU", DICOM_SERVER_AET, DICOM_SERVER_MOVE_AET);
+        NifiMoveScu nifiMoveSCU = new NifiMoveScu(DICOM_SERVER_HOST, DICOM_SERVER_PORT, "MOVE_SCU", DICOM_SERVER_AET, DICOM_SERVER_MOVE_AET);
         String studyInstanceUID = "1.2.840.113845.11.1000000001900555490.20160718102042.2434233";
         nifiMoveSCU.moveStudy(studyInstanceUID);
     }

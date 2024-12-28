@@ -17,7 +17,7 @@ import org.apache.nifi.flowfile.attributes.CoreAttributes;
 import org.apache.nifi.processor.*;
 import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.util.StandardValidators;
-import org.rra.cfind.DcmFindScu;
+import org.rra.cfind.NifiFindScu;
 import org.rra.dcm.DicomUtils;
 
 import java.io.BufferedOutputStream;
@@ -30,7 +30,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-import static org.rra.cfind.DcmFindScu.*;
+import static org.rra.cfind.NifiFindScu.*;
 
 @InputRequirement(InputRequirement.Requirement.INPUT_REQUIRED)
 @SideEffectFree
@@ -141,16 +141,16 @@ public class FindScu extends AbstractProcessor {
         String remoteHost = context.getProperty(REMOTE_HOST).evaluateAttributeExpressions().getValue();
         int port = context.getProperty(PORT).evaluateAttributeExpressions().asInteger();
 
-        DcmFindScu findSCU;
+        NifiFindScu findSCU;
         String level = context.getProperty(QUERY_LEVEL).evaluateAttributeExpressions().getValue();
         if (level.equals(PATSTUDY_LEVEL)) {
-            findSCU = new DcmFindScu(calling_aet, called_aet, remoteHost, port, QUERY_LEVEL_PATIENT_STUDY);
+            findSCU = new NifiFindScu(calling_aet, called_aet, remoteHost, port, QUERY_LEVEL_PATIENT_STUDY);
             findSCU.getQueryFilter().setPatientID(input);
         } else if (level.equals(SERIES_LEVEL)) {
-            findSCU = new DcmFindScu(calling_aet, called_aet, remoteHost, port, QUERY_LEVEL_SERIES);
+            findSCU = new NifiFindScu(calling_aet, called_aet, remoteHost, port, QUERY_LEVEL_SERIES);
             findSCU.getQueryFilter().setStudyInstanceUID(input);
         } else if (level.equals(IMAGE_LEVEL)) {
-            findSCU = new DcmFindScu(calling_aet, called_aet, remoteHost, port, QUERY_LEVEL_IMAGE);
+            findSCU = new NifiFindScu(calling_aet, called_aet, remoteHost, port, QUERY_LEVEL_IMAGE);
             findSCU.getQueryFilter().setStudyInstanceUID(input);
         } else {
             log.error("# # # No Level is set # # #");

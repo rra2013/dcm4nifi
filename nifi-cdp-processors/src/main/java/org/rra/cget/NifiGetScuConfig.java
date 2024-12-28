@@ -1,6 +1,12 @@
-package org.rra.cstore;
+package org.rra.cget;
 
-public class NifiStoreSCUConfig {
+public class NifiGetScuConfig {
+    public enum GET_LEVEL{
+        PATIENT,
+        STUDY,
+        SERIES,
+        IMAGE
+    }
     public static boolean NOT_ASYNC = false;
     public static boolean NOT_PACK_PDV = false;
     public static boolean TCP_DELAY = false;
