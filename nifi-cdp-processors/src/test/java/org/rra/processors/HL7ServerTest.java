@@ -18,6 +18,7 @@ import org.apache.nifi.util.TestRunners;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.rra.hl7.NifiHL7HapiServer;
 
 import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
@@ -61,7 +62,18 @@ public class HL7ServerTest {
         List<MockFlowFile> success = testRunner.getFlowFilesForRelationship(HL7Server.REL_SUCCESS);
         log.info("Count of success {}", success.size());
         Assertions.assertTrue(success.size() >= 1);
+
         success.forEach(mockFlowFile -> {
+                    String sendApp = mockFlowFile.getAttribute(NifiHL7HapiServer.SEND_APP);
+                    log.info("sendApp {}", sendApp);
+                    String sendFacil = mockFlowFile.getAttribute(NifiHL7HapiServer.SEND_FACILITY);
+                    log.info("sendFacil {}", sendFacil);
+                    String recApp = mockFlowFile.getAttribute(NifiHL7HapiServer.RECEIVE_APP);
+                    log.info("recApp {}", recApp);
+                    String recFacil = mockFlowFile.getAttribute(NifiHL7HapiServer.RECEIVE_FACILITY);
+                    log.info("recFacil {}", recFacil);
+                    String msgType = mockFlowFile.getAttribute(NifiHL7HapiServer.MSG_TYPE);
+                    log.info("msgType {}", msgType);
                     byte[] readAnonym = mockFlowFile.toByteArray();
                     try (ByteArrayInputStream ba = new ByteArrayInputStream(readAnonym)) {
                         try (BufferedInputStream bif = new BufferedInputStream(ba)) {
