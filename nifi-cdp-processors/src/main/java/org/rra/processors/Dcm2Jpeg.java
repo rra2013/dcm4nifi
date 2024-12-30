@@ -14,15 +14,13 @@ import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.flowfile.attributes.CoreAttributes;
 import org.apache.nifi.processor.*;
 import org.apache.nifi.processor.exception.ProcessException;
+import org.dcm4che3.data.Attributes;
 import org.rra.dcm.Dicom2JpegTransformer;
-import org.rra.dcm.Dicom2XmlTransformer;
+import org.rra.dcm.DicomUtils;
 
 import javax.imageio.ImageIO;
 import javax.imageio.stream.ImageOutputStream;
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.IOException;
-import java.io.OutputStream;
+import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -57,13 +55,18 @@ public class Dcm2Jpeg extends AbstractProcessor {
         if (flowFile == null) {
             return;
         }
+        final String tsuid = flowFile.getAttribute("TransferSyntax");
+        if (tsuid == null) {
+            log.error("FlowFile contains no attribute 'TransferSyntax'");
+            return;
+        }
         try {
             flowFile = session.write(flowFile, (in, out) -> {
                 try (OutputStream buffOut = new BufferedOutputStream(out)) {
                     try (ImageOutputStream imageOutputStream = ImageIO.createImageOutputStream(buffOut)){
-                        Dicom2JpegTransformer transformer = new Dicom2JpegTransformer();
-                        try(BufferedInputStream bis = new BufferedInputStream(in)){
-                            transformer.transform(1, bis, imageOutputStream);
+                        try(BufferedInputStream bufferedInputStream = new BufferedInputStream(in)){
+                            Dicom2JpegTransformer transformer = new Dicom2JpegTransformer();
+                            transformer.transform(1, bufferedInputStream, imageOutputStream);
                         }
                     } catch (Exception e) {
                         throw new IOException(e);
@@ -72,7 +75,7 @@ public class Dcm2Jpeg extends AbstractProcessor {
                     throw new RuntimeException(e);
                 }
             });
-            String fileName = flowFile.getAttribute(CoreAttributes.FILENAME.key()) + ".jpg";
+            String fileName = flowFile.getAttribute(CoreAttributes.UUID.key()) + ".jpg";
             flowFile = session.putAttribute(flowFile, CoreAttributes.FILENAME.key(), fileName);
             flowFile = session.putAttribute(flowFile, CoreAttributes.MIME_TYPE.key(), "image/jpeg");
             session.getProvenanceReporter().modifyContent(flowFile, "dcm2jpeg");

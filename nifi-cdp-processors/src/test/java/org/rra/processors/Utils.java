@@ -69,10 +69,10 @@ public class Utils {
         Collection<File> files = FileUtils.listFiles(dir, null, true);
         files.forEach(file -> {
             //log.debug("DICOM FIle: {}", file.getAbsolutePath());
-            StringBuffer ts = new StringBuffer();
-            byte[] bytes = readDicomFile(file, ts);
-            dcmObjects.put(ts.toString(), bytes);
-            log.info("Transfersyntax: {}", ts.toString());
+            StringBuffer tsuid = new StringBuffer();
+            byte[] bytes = readDicomFile(file, tsuid);
+            dcmObjects.put(tsuid.toString(), bytes);
+            log.info("Transfersyntax: {}", tsuid.toString());
         });
         log.info("Read {} DICOM Files OK.", files.size());
     }

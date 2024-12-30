@@ -1,15 +1,12 @@
 package org.rra.dcm;
 
 import org.dcm4che3.data.Attributes;
-import org.dcm4che3.data.Sequence;
-import org.dcm4che3.data.Tag;
 import org.dcm4che3.data.UID;
+import org.dcm4che3.io.DicomEncodingOptions;
 import org.dcm4che3.io.DicomOutputStream;
 import org.dcm4che3.util.SafeClose;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.ByteArrayInputStream;
+import java.io.*;
 
 public class DicomUtils {
     public static void copyAttributesToOutput(Attributes attributes, BufferedOutputStream outputStream) {
@@ -35,5 +32,23 @@ public class DicomUtils {
             e.printStackTrace();
         }
         return dcm;
+    }
+    public static Attributes streamToAttributes(InputStream input) {
+        Attributes dcm = new Attributes();
+        try(BufferedInputStream bis = new BufferedInputStream(input)){
+            dcm = byteArrayToAttributes( bis.readAllBytes() );
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return dcm;
+    }
+    public static byte[] attributesToByteArrayEVRLE(Attributes dcm, Attributes fmi) throws IOException {
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+            try (DicomOutputStream dos = new DicomOutputStream(baos,UID.ExplicitVRLittleEndian)) {
+                dos.setEncodingOptions(DicomEncodingOptions.DEFAULT);
+                dos.writeDataset(fmi, dcm);
+            }
+            return baos.toByteArray();
+        }
     }
 }

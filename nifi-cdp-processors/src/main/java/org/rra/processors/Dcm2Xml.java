@@ -63,7 +63,7 @@ public class Dcm2Xml extends AbstractProcessor {
                     throw new RuntimeException(e);
                 }
             });
-            String fileName = flowFile.getAttribute(CoreAttributes.FILENAME.key()) + ".xml";
+            String fileName = flowFile.getAttribute(CoreAttributes.UUID.key()) + ".xml";
             flowFile = session.putAttribute(flowFile, CoreAttributes.FILENAME.key(), fileName);
             flowFile = session.putAttribute(flowFile, CoreAttributes.MIME_TYPE.key(), "application/xml");
             session.getProvenanceReporter().modifyContent(flowFile, "dcm2xml");

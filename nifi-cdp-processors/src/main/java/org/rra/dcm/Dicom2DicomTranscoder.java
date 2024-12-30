@@ -20,7 +20,7 @@ public class Dicom2DicomTranscoder {
 
     private static void transcodeWithTranscoder( final InputStream inputStream, final OutputStream outputStream, String tsuid) throws IOException {
         try (Transcoder transcoder = new Transcoder(inputStream)) {
-            transcoder.setIncludeFileMetaInformation(false);
+            transcoder.setIncludeFileMetaInformation(true);
             transcoder.setRetainFileMetaInformation(false);
             transcoder.setEncodingOptions(encOpts);
             transcoder.setDestinationTransferSyntax(tsuid);

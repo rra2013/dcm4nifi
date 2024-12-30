@@ -18,7 +18,6 @@ public class Dicom2JpegTransformer {
     private final ImageReader imageReader =
             ImageIO.getImageReadersByFormatName("DICOM").next();
     private ReadImage readImage;
-    private String suffix;
     private int windowIndex;
     private int voiLUTIndex;
     private boolean preferWindow = true;
@@ -51,7 +50,7 @@ public class Dicom2JpegTransformer {
 
     private void init() {
         // Init the writer
-        initImageWriter("JPEG", "jpg", "com.sun.imageio.plugins.*", null, .85);
+        initImageWriter("JPEG", "com.sun.imageio.plugins.*", null, .85);
         //initImageWriter("PNG",this.suffix,"com.sun.imageio.plugins.*",null, null);
         this.windowIndex = 0;
         this.voiLUTIndex = 0;
@@ -85,8 +84,7 @@ public class Dicom2JpegTransformer {
         return param;
     }
 
-    private void initImageWriter(String formatName, String suffix, String clazz, String compressionType, Number quality) {
-        this.suffix = suffix != null ? suffix : formatName.toLowerCase();
+    private void initImageWriter(String formatName, String clazz, String compressionType, Number quality) {
         Iterator<ImageWriter> imageWriters = ImageIO.getImageWritersByFormatName(formatName);
         if (!imageWriters.hasNext())
             throw new IllegalArgumentException(

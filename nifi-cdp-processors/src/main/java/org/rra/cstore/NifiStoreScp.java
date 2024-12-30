@@ -183,7 +183,7 @@ public class NifiStoreScp {
                 long t1 = System.nanoTime();
                 try (OutputStream flowFileOutputStream = processSession.write(flowFile)) {
                     try(BufferedOutputStream bos = new BufferedOutputStream(flowFileOutputStream)){
-                        storeOnlyAttributesTo(bos, data);
+                        storeOnlyAttributesTo(bos, as.createFileMetaInformation(iuid, cuid, tsuid), data);
                     }
                     log.info("+ + + DICOM Object received -> SOPIUID: {} + + +", iuid);
                 } catch (SocketException socketException) {
@@ -203,6 +203,8 @@ public class NifiStoreScp {
                     processSession.putAttribute(flowFile, "TransferSyntax", tsuid);
                     processSession.putAttribute(flowFile, "CallingAET", callingAET);
                     processSession.putAttribute(flowFile, "CalledAET", calledAET);
+                    String fileName = flowFile.getAttribute(CoreAttributes.FILENAME.key()) + ".dcm";
+                    flowFile = processSession.putAttribute(flowFile, CoreAttributes.FILENAME.key(), fileName);
                     //Transfer application/dicom
                     flowFile = processSession.putAttribute(flowFile, CoreAttributes.MIME_TYPE.key(), "application/dicom");
                     //processSession.getProvenanceReporter().modifyContent(flowFile);
@@ -227,10 +229,11 @@ public class NifiStoreScp {
         }
 
 
-        private void storeOnlyAttributesTo(OutputStream outputStream, PDVInputStream data){
+        private void storeOnlyAttributesTo(OutputStream outputStream, Attributes fmi, PDVInputStream data){
             try {
                 DicomOutputStream out = new DicomOutputStream(outputStream, UID.ExplicitVRLittleEndian);
                 try {
+                    out.writeFileMetaInformation(fmi);
                     data.copyTo(out);
                 } finally {
                     SafeClose.close(out);
