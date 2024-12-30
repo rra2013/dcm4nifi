@@ -12,8 +12,8 @@ import static org.rra.processors.Utils.readDicomFiles;
 @Slf4j
 public class DataForTest {
 
-    public static final String DICOM_PATH = "/mnt/f/DICOM/CD_FUSS/";
-    public static final String DICOM_PATH_DEF = "/mnt/f/DICOM/ct_test/";
+    public static final String DICOM_PATH = "/mnt/f/DICOM/CT/";
+    public static final String DICOM_PATH_DEF = "/mnt/f/DICOM/CT/ct_IVRLE/";
     public static final String DICOM_SERVER_HOST = "localhost";
     public static final String DICOM_SERVER_AET = "DCM4CHEE";
     public static final String DICOM_SERVER_MOVE_AET = "DCM4NIFI";

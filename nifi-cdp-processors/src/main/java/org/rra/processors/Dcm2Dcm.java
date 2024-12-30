@@ -57,13 +57,14 @@ public class Dcm2Dcm extends AbstractProcessor {
     public static final String JP2KI = "JPEG 2000 Lossy";
     public static final String DEFL = "Deflated Explicit VR Little Endian";
     public static final String IVRLE = "Implicit VR Little Endian (Default TS)";
+    public static final String EVRLE = "Explicit VR Little Endian";
 
     public static final PropertyDescriptor TRANSFER_SYNTAX = new PropertyDescriptor.Builder()
             .name("transfer-syntax")
             .displayName("Transfer Syntax")
             .description("The Transfer Syntax")
             .required(true)
-            .allowableValues(IVRLE, JPEG, JPLL, JPLSL,JPLSN,JP2KR, JP2KI, DEFL)
+            .allowableValues(IVRLE,EVRLE, JPEG, JPLL, JPLSL,JPLSN,JP2KR, JP2KI, DEFL)
             .defaultValue(IVRLE)
             .addValidator(Validator.VALID)
             .build();
@@ -123,6 +124,7 @@ public class Dcm2Dcm extends AbstractProcessor {
     }
     private static String transferSyntaxOf( String ts) {
         return ts.equals(IVRLE) ? UID.ImplicitVRLittleEndian
+                : ts.equals(EVRLE) ? UID.ExplicitVRLittleEndian
                 : ts.equals(DEFL) ? UID.DeflatedExplicitVRLittleEndian
                 : ts.equals(JPEG) ? UID.JPEGBaseline8Bit
                 : ts.equals(JPLL) ? UID.JPEGLosslessSV1

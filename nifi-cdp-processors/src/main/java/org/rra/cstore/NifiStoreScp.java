@@ -25,7 +25,6 @@ import org.dcm4che3.util.StringUtils;
 
 import java.io.*;
 import java.net.SocketException;
-import java.security.GeneralSecurityException;
 import java.util.Properties;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
@@ -170,7 +169,6 @@ public class NifiStoreScp {
             String cuid = rq.getString(Tag.AffectedSOPClassUID);
             String iuid = rq.getString(Tag.AffectedSOPInstanceUID);
             String tsuid = pc.getTransferSyntax();
-
             final ProcessSession processSession;
             try {
                 processSession = createProcessSession();
@@ -183,7 +181,7 @@ public class NifiStoreScp {
                 long t1 = System.nanoTime();
                 try (OutputStream flowFileOutputStream = processSession.write(flowFile)) {
                     try(BufferedOutputStream bos = new BufferedOutputStream(flowFileOutputStream)){
-                        storeOnlyAttributesTo(bos, as.createFileMetaInformation(iuid, cuid, tsuid), data);
+                        storeAttributesTo(bos, as.createFileMetaInformation(iuid, cuid, tsuid), data);
                     }
                     log.info("+ + + DICOM Object received -> SOPIUID: {} + + +", iuid);
                 } catch (SocketException socketException) {
@@ -229,7 +227,7 @@ public class NifiStoreScp {
         }
 
 
-        private void storeOnlyAttributesTo(OutputStream outputStream, Attributes fmi, PDVInputStream data){
+        private void storeAttributesTo(OutputStream outputStream, Attributes fmi, PDVInputStream data){
             try {
                 DicomOutputStream out = new DicomOutputStream(outputStream, UID.ExplicitVRLittleEndian);
                 try {
