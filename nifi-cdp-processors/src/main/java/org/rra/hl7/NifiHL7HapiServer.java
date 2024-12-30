@@ -6,10 +6,14 @@ import ca.uhn.hl7v2.HapiContext;
 import ca.uhn.hl7v2.app.Connection;
 import ca.uhn.hl7v2.app.ConnectionListener;
 import ca.uhn.hl7v2.app.HL7Service;
+import ca.uhn.hl7v2.model.GenericMessage;
 import ca.uhn.hl7v2.model.Message;
+import ca.uhn.hl7v2.model.v25.message.ADT_A01;
+import ca.uhn.hl7v2.parser.GenericModelClassFactory;
 import ca.uhn.hl7v2.protocol.ReceivingApplication;
 import ca.uhn.hl7v2.protocol.ReceivingApplicationException;
 import ca.uhn.hl7v2.protocol.ReceivingApplicationExceptionHandler;
+import ca.uhn.hl7v2.util.Terser;
 import ca.uhn.hl7v2.util.idgenerator.InMemoryIDGenerator;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.IOUtils;
@@ -32,6 +36,11 @@ import java.util.concurrent.atomic.AtomicReference;
 @Slf4j
 public class NifiHL7HapiServer implements IHL7Server, ReceivingApplication<Message> , ConnectionListener, ReceivingApplicationExceptionHandler {
 
+    public final static String MSG_TYPE = "MessageType";
+    public final static String SEND_APP = "SendingApplication";
+    public final static String SEND_FACILITY = "SendingFacility";
+    public final static String RECEIVE_APP = " ReceivingApplication";
+    public final static String RECEIVE_FACILITY = "ReceivingFacility";
 
     private final AtomicReference<ProcessSessionFactory> sessionFactory;
     private final CountDownLatch sessionFactorySetSignal;
@@ -65,6 +74,7 @@ public class NifiHL7HapiServer implements IHL7Server, ReceivingApplication<Messa
     @Override
     public void startServer(int port, String msgType, String trigger) {
         boolean useTls = false; // Should we use TLS/SSL?
+        context.setModelClassFactory(new GenericModelClassFactory());
         server = context.newServer(port, useTls);
         server.registerApplication(msgType, trigger, this);
         server.registerConnectionListener(this);
@@ -85,7 +95,7 @@ public class NifiHL7HapiServer implements IHL7Server, ReceivingApplication<Messa
 
     @Override
     public Message processMessage(Message message, Map<String, Object> map) throws ReceivingApplicationException, HL7Exception {
-        String encodedMessage = new DefaultHapiContext().getPipeParser().encode(message);
+        String encodedMessage = context.getPipeParser().encode(message);
         log.debug("Received message:\n" + encodedMessage.replaceAll("\\r", "\r\n") + "\n\n");
         try {
             createFlowFile(encodedMessage);
@@ -107,8 +117,22 @@ public class NifiHL7HapiServer implements IHL7Server, ReceivingApplication<Messa
             FlowFile flowFile = processSession.create();
             try {
                 long t1 = System.nanoTime();
+                String sendingApp;
+                String sendingFacility;
+                String receivingApp;
+                String receivingFacility;
+                String msgCode;
+                String trigEvent;
                 try (OutputStream flowFileOutputStream = processSession.write(flowFile)) {
                     copyMessage(encodedMessage, flowFileOutputStream);
+                    GenericMessage msg =  (GenericMessage) context.getPipeParser().parse(encodedMessage);
+                    Terser t = new Terser(msg);
+                    sendingApp = t.get("/MSH-3-1");
+                    sendingFacility = t.get("/MSH-4-1");
+                    receivingApp = t.get("/MSH-5-1");
+                    receivingFacility = t.get("/MSH-6-1");
+                    msgCode = t.get("/MSH-9-1");
+                    trigEvent = t.get("/MSH-9-2");
                 } catch (SocketException socketException) {
                     log.error("Socket exception during data transfer", socketException);
                     processSession.rollback();
@@ -119,9 +143,15 @@ public class NifiHL7HapiServer implements IHL7Server, ReceivingApplication<Messa
                     throw new IOException(ioException.getMessage());
                 }
                 try {
+                    flowFile = processSession.putAttribute(flowFile, SEND_APP , sendingApp);
+                    flowFile = processSession.putAttribute(flowFile, SEND_FACILITY, sendingFacility);
+                    flowFile = processSession.putAttribute(flowFile, RECEIVE_APP, receivingApp);
+                    flowFile = processSession.putAttribute(flowFile, RECEIVE_FACILITY , receivingFacility);
+                    flowFile = processSession.putAttribute(flowFile, MSG_TYPE , msgCode+"^"+trigEvent);
+                    String fileName = flowFile.getAttribute(CoreAttributes.FILENAME.key()) + ".hl7";
+                    flowFile = processSession.putAttribute(flowFile, CoreAttributes.FILENAME.key(), fileName);
                     //Transfer text/plain
                     flowFile = processSession.putAttribute(flowFile, CoreAttributes.MIME_TYPE.key(), "text/plain");
-                    //processSession.getProvenanceReporter().modifyContent(flowFile);
 
                     final long importNanos = System.nanoTime() - t1;
                     final long importMillis = TimeUnit.MILLISECONDS.convert(importNanos, TimeUnit.NANOSECONDS);
@@ -140,7 +170,7 @@ public class NifiHL7HapiServer implements IHL7Server, ReceivingApplication<Messa
                 throw e;
             }
         } catch (Exception exception) {
-            log.error("ProcessSession could not be acquired, command STOR aborted.", exception);
+            log.error("ProcessSession could not be acquired, receive aborted.", exception);
             throw exception;
         }
     }
