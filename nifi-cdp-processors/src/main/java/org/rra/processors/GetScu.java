@@ -141,7 +141,7 @@ public class GetScu extends AbstractProcessor {
 
         Attributes request = null;
         try (InputStream read = session.read(flowFile)) {
-            request = readDicomObject(read);
+            request = DicomUtils.readDicomObject(read);
         } catch (IOException e) {
             session.getProvenanceReporter().route(flowFile, REL_FAILURE);
             session.transfer(flowFile, REL_FAILURE);
@@ -206,10 +206,7 @@ public class GetScu extends AbstractProcessor {
         }
     }
 
-    private static Attributes readDicomObject(InputStream in) throws IOException {
-        DicomInputStream din = new DicomInputStream(in);
-        return din.readDatasetUntilPixelData();
-    }
+
 
     private static String readStudyIUID(Attributes data) throws Exception {
         String uid = data.getString(Tag.StudyInstanceUID, null);

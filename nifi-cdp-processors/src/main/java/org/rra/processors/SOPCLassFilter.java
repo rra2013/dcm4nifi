@@ -14,11 +14,18 @@ import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.processor.*;
 import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.util.StandardValidators;
+import org.dcm4che3.data.Attributes;
+import org.rra.dcm.DcmObjectType;
+import org.rra.dcm.SOPClassInfo;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
+
+import static org.rra.dcm.DicomUtils.readDicomObject;
 
 @Slf4j
 @SupportsBatching
@@ -30,16 +37,47 @@ import java.util.Set;
         inputRequirement = InputRequirement.Requirement.INPUT_REQUIRED)
 
 public class SOPCLassFilter extends AbstractProcessor {
+    public final static String UNCOMPRESSED_SINGLE_FRAME_IMAGE = "UncompressedSingleFrameImage";
+    public final static String COMPRESSED_SINGLE_FRAME_IMAGE = "CompressedSingleFrameImage";
+    public final static String UNCOMPRESSED_MULTI_FRAME_IMAGE = "UncompressedMultiFrameImage";
+    public final static String COMPRESSED_MULTI_FRAME_IMAGE = "CompressedMultiFrameImage";
+    public final static String MPEG2VIDEO = "MPEG2Video";
+    public final static String MPEG4VIDEO = "MPEG4Video";
+    public final static String SR_DOCUMENT = "SRDocument";
+    public final static String ENCAPSULATED_PDF = "EncapsulatedPDF";
+    public final static String ENCAPSULATED_CDA = "EncapsulatedCDA";
+    public final static String ENCAPSULATED_STL = "EncapsulatedSTL";
+    public final static String ENCAPSULATED_OBJ = "EncapsulatedOBJ";
+    public final static String ENCAPSULATED_MTL = "EncapsulatedMTL";
+    public final static String ENCAPSULATED_GENOZIP = "EncapsulatedGenozip";
+    public final static String ENCAPSULATED_VCFBZIP2 = "EncapsulatedVCFBzip2";
+    public final static String ENCAPSULATED_BZIP2 = "EncapsulatedBzip2";
+    public final static String OTHER = "Other";
+    public final static String ALL = "*";
+    public final static String VALUE = "Value";
+    public static final PropertyDescriptor OBJECT_TYPE = new PropertyDescriptor
+            .Builder()
+            .name("ObjectType")
+            .displayName("Object Type")
+            .description("The Type of the DICOM Object that will be filtered. 'All' or Value '*' will bypass the object")
+            .required(true)
+            .allowableValues(ALL, VALUE, UNCOMPRESSED_SINGLE_FRAME_IMAGE, COMPRESSED_SINGLE_FRAME_IMAGE,
+                    UNCOMPRESSED_MULTI_FRAME_IMAGE, COMPRESSED_MULTI_FRAME_IMAGE,
+                    MPEG2VIDEO, MPEG4VIDEO, SR_DOCUMENT, ENCAPSULATED_PDF, ENCAPSULATED_CDA,
+                    ENCAPSULATED_STL, ENCAPSULATED_OBJ, ENCAPSULATED_MTL,
+                    ENCAPSULATED_GENOZIP, ENCAPSULATED_VCFBZIP2,
+                    ENCAPSULATED_BZIP2, OTHER)
+            .defaultValue(VALUE)
+            .build();
     public static final PropertyDescriptor FILTER_SOP_CLASS = new PropertyDescriptor
             .Builder()
             .name("SOPClassUID")
             .displayName("SOP Class UID")
-            .description("The The SOP Class that will be filtered. A '*' will bypass the object")
+            .description("The The SOP Class that will be filtered. A '*' will bypass the object and is like the 'All' Selection. This property will be used when 'Value' is selected.")
             .required(true)
-            .defaultValue("*")
+            .defaultValue(ALL)
             .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
             .build();
-
     public static final Relationship REL_SUCCESS = new Relationship.Builder()
             .name("success")
             .description("Success relationship of the filtering process")
@@ -58,18 +96,51 @@ public class SOPCLassFilter extends AbstractProcessor {
         if (flowFile == null) {
             return;
         }
+        Attributes attr = null;
+        try (InputStream read = session.read(flowFile)) {
+            attr = readDicomObject(read);
+        } catch (IOException e) {
+            session.getProvenanceReporter().route(flowFile, REL_FAILURE);
+            session.transfer(flowFile, REL_FAILURE);
+            log.error("Error", e);
+            return;
+        }
 
-        if (context.getProperty(FILTER_SOP_CLASS).isSet()) {
-            String filterSopIuid = context.getProperty(FILTER_SOP_CLASS).evaluateAttributeExpressions(flowFile).getValue();
-            if (filterSopIuid.equals("*")){
+
+        if (context.getProperty(OBJECT_TYPE).isSet()){
+            String selectedType = context.getProperty(OBJECT_TYPE).evaluateAttributeExpressions().getValue();
+            if (selectedType.equals(ALL)){
                 session.getProvenanceReporter().route(flowFile, REL_SUCCESS);
                 session.transfer(flowFile, REL_SUCCESS);
-            }else{
-                String affectedSOPClassUID = flowFile.getAttribute("AffectedSOPClassUID");
-                if (affectedSOPClassUID.equalsIgnoreCase(filterSopIuid)){
+            }
+            else if (selectedType.equals(VALUE)){
+                if (context.getProperty(FILTER_SOP_CLASS).isSet()) {
+                    String filterSopIuid = context.getProperty(FILTER_SOP_CLASS).evaluateAttributeExpressions(flowFile).getValue();
+                    if (filterSopIuid.equals("*")) {
+                        session.getProvenanceReporter().route(flowFile, REL_SUCCESS);
+                        session.transfer(flowFile, REL_SUCCESS);
+                    } else {
+                        String affectedSOPClassUID = flowFile.getAttribute("AffectedSOPClassUID");
+                        if (affectedSOPClassUID.equalsIgnoreCase(filterSopIuid)) {
+                            session.getProvenanceReporter().route(flowFile, REL_SUCCESS);
+                            session.transfer(flowFile, REL_SUCCESS);
+                        } else {
+                            session.getProvenanceReporter().route(flowFile, REL_FAILURE);
+                            session.transfer(flowFile, REL_FAILURE);
+                        }
+                    }
+                }else{
+                    session.getProvenanceReporter().route(flowFile, REL_FAILURE);
+                    session.transfer(flowFile, REL_FAILURE);
+                }
+            }else {
+                String tsuid = flowFile.getAttribute("TransferSyntax");
+                SOPClassInfo sop = new SOPClassInfo(attr, tsuid);
+                String typeOfObject = DcmObjectType.objectTypeOf(sop).toString();
+                if (selectedType.equals(typeOfObject)) {
                     session.getProvenanceReporter().route(flowFile, REL_SUCCESS);
                     session.transfer(flowFile, REL_SUCCESS);
-                } else {
+                }else{
                     session.getProvenanceReporter().route(flowFile, REL_FAILURE);
                     session.transfer(flowFile, REL_FAILURE);
                 }
@@ -78,11 +149,12 @@ public class SOPCLassFilter extends AbstractProcessor {
             session.getProvenanceReporter().route(flowFile, REL_FAILURE);
             session.transfer(flowFile, REL_FAILURE);
         }
+
     }
 
     @Override
     protected void init(final ProcessorInitializationContext context) {
-        descriptors = List.of(FILTER_SOP_CLASS);
+        descriptors = List.of(OBJECT_TYPE, FILTER_SOP_CLASS);
         relationships = Set.of(REL_SUCCESS, REL_FAILURE);
     }
 
@@ -110,6 +182,7 @@ public class SOPCLassFilter extends AbstractProcessor {
             validationResults.add(createValidationResult(FILTER_SOP_CLASS.getDisplayName(), explanation));
         }
     }
+
     private ValidationResult createValidationResult(String subject, String explanation) {
         return new ValidationResult.Builder().subject(subject).valid(false).explanation(explanation).build();
     }

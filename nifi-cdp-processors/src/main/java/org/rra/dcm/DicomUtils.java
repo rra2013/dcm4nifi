@@ -3,6 +3,7 @@ package org.rra.dcm;
 import org.dcm4che3.data.Attributes;
 import org.dcm4che3.data.UID;
 import org.dcm4che3.io.DicomEncodingOptions;
+import org.dcm4che3.io.DicomInputStream;
 import org.dcm4che3.io.DicomOutputStream;
 import org.dcm4che3.util.SafeClose;
 
@@ -50,5 +51,9 @@ public class DicomUtils {
             }
             return baos.toByteArray();
         }
+    }
+    public static Attributes readDicomObject(InputStream in) throws IOException {
+        DicomInputStream din = new DicomInputStream(in);
+        return din.readDatasetUntilPixelData();
     }
 }
