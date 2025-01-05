@@ -25,7 +25,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 
-import static org.rra.dcm.DicomUtils.readDicomObject;
+import static org.rra.dcm.DicomUtils.readDicomObjectUntilPixelData;
 
 @Slf4j
 @SupportsBatching
@@ -98,7 +98,7 @@ public class SOPCLassFilter extends AbstractProcessor {
         }
         Attributes attr = null;
         try (InputStream read = session.read(flowFile)) {
-            attr = readDicomObject(read);
+            attr = readDicomObjectUntilPixelData(read);
         } catch (IOException e) {
             session.getProvenanceReporter().route(flowFile, REL_FAILURE);
             session.transfer(flowFile, REL_FAILURE);

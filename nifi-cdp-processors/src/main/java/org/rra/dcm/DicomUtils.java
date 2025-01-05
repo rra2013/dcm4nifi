@@ -52,7 +52,7 @@ public class DicomUtils {
             return baos.toByteArray();
         }
     }
-    public static Attributes readDicomObject(InputStream in) throws IOException {
+    public static Attributes readDicomObjectUntilPixelData(InputStream in) throws IOException {
         DicomInputStream din = new DicomInputStream(in);
         return din.readDatasetUntilPixelData();
     }

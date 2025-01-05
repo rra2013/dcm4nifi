@@ -18,7 +18,6 @@ import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.util.StandardValidators;
 import org.dcm4che3.data.Attributes;
 import org.dcm4che3.data.Tag;
-import org.dcm4che3.io.DicomInputStream;
 import org.dcm4che3.util.TagUtils;
 import org.rra.cget.NifiGetScu;
 import org.rra.dcm.DicomUtils;
@@ -29,10 +28,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 
 @Slf4j
 @SupportsBatching
@@ -141,7 +138,7 @@ public class GetScu extends AbstractProcessor {
 
         Attributes request = null;
         try (InputStream read = session.read(flowFile)) {
-            request = DicomUtils.readDicomObject(read);
+            request = DicomUtils.readDicomObjectUntilPixelData(read);
         } catch (IOException e) {
             session.getProvenanceReporter().route(flowFile, REL_FAILURE);
             session.transfer(flowFile, REL_FAILURE);

@@ -391,6 +391,10 @@ public class DeIdentifier {
     }
 
     private static String hash(IDWithIssuer pid) {
+        if (null == pid) {
+            String tmp = Long.toString(System.nanoTime());
+            return UUID.nameUUIDFromBytes(tmp.getBytes(StandardCharsets.UTF_8)).toString();
+        }
         return UUID.nameUUIDFromBytes(pid.toString().getBytes(StandardCharsets.UTF_8)).toString();
     }
 
