@@ -5,7 +5,7 @@ org.rra.processors.HL7Server
 org.rra.processors.HL72Xml
 org.rra.processors.DICOMRouter
 org.rra.processors.DICOMRelais
-org.rra.processors.SOPCLassFilter
+org.rra.processors.SOPClassFilter
 org.rra.processors.TransfersyntaxFilter
 org.rra.processors.Dcm2Xml
 org.rra.processors.FindScu

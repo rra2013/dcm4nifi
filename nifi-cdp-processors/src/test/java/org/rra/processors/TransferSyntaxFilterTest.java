@@ -65,7 +65,7 @@ public class TransferSyntaxFilterTest {
     public void testProcessorSuccessWithData() {
         log.info("Begin SOP Class Filter Processor Test");
         testRunner.setValidateExpressionUsage(false);
-        testRunner.setProperty(SOPCLassFilter.FILTER_SOP_CLASS, UID.ImplicitVRLittleEndian);
+        testRunner.setProperty(SOPClassFilter.FILTER_SOP_CLASS, UID.ImplicitVRLittleEndian);
         Set<String> keys = dcmObjects.keySet();
         keys.forEach(ts -> {
             HashMap<String, String> attr = new HashMap<>();
@@ -74,6 +74,6 @@ public class TransferSyntaxFilterTest {
             testRunner.run();
         });
 
-        testRunner.assertAllFlowFilesTransferred(SOPCLassFilter.REL_SUCCESS, dcmObjects.size());
+        testRunner.assertAllFlowFilesTransferred(SOPClassFilter.REL_SUCCESS, dcmObjects.size());
     }
 }

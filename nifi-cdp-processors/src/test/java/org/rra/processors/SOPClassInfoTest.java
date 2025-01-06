@@ -30,7 +30,7 @@ public class SOPClassInfoTest {
     }
     @BeforeEach
     public void init() {
-        testRunner = TestRunners.newTestRunner(SOPCLassFilter.class);
+        testRunner = TestRunners.newTestRunner(SOPClassFilter.class);
     }
 
     @Test
@@ -38,8 +38,8 @@ public class SOPClassInfoTest {
         log.info("Begin SOP Class Filter Processor Test");
         testRunner.setValidateExpressionUsage(false);
         //Test Lauf All
-        testRunner.setProperty(SOPCLassFilter.OBJECT_TYPE, SOPCLassFilter.VALUE);
-        testRunner.setProperty(SOPCLassFilter.FILTER_SOP_CLASS, "*");
+        testRunner.setProperty(SOPClassFilter.OBJECT_TYPE, SOPClassFilter.VALUE);
+        testRunner.setProperty(SOPClassFilter.FILTER_SOP_CLASS, "*");
         dcmObjects.forEach(bytes -> {
             Attributes dcm = DicomUtils.byteArrayToAttributes(bytes);
             String sopCUID = dcm.getString(Tag.SOPClassUID);
@@ -49,11 +49,11 @@ public class SOPClassInfoTest {
             testRunner.enqueue(bytes, attr);
             testRunner.run();
         });
-        List<MockFlowFile> success = testRunner.getFlowFilesForRelationship(SOPCLassFilter.REL_SUCCESS);
+        List<MockFlowFile> success = testRunner.getFlowFilesForRelationship(SOPClassFilter.REL_SUCCESS);
         log.info("Success {}", success.size());
         //Test lauf 2
-        testRunner.setProperty(SOPCLassFilter.OBJECT_TYPE, SOPCLassFilter.ALL);
-        testRunner.setProperty(SOPCLassFilter.FILTER_SOP_CLASS, "not_used");
+        testRunner.setProperty(SOPClassFilter.OBJECT_TYPE, SOPClassFilter.ALL);
+        testRunner.setProperty(SOPClassFilter.FILTER_SOP_CLASS, "not_used");
         dcmObjects.forEach(bytes -> {
             Attributes dcm = DicomUtils.byteArrayToAttributes(bytes);
             String sopCUID = dcm.getString(Tag.SOPClassUID);
@@ -63,11 +63,11 @@ public class SOPClassInfoTest {
             testRunner.enqueue(bytes, attr);
             testRunner.run();
         });
-        success = testRunner.getFlowFilesForRelationship(SOPCLassFilter.REL_SUCCESS);
+        success = testRunner.getFlowFilesForRelationship(SOPClassFilter.REL_SUCCESS);
         log.info("Success {}", success.size());
         //test Lauf 3
-        testRunner.setProperty(SOPCLassFilter.OBJECT_TYPE, SOPCLassFilter.UNCOMPRESSED_SINGLE_FRAME_IMAGE);
-        testRunner.setProperty(SOPCLassFilter.FILTER_SOP_CLASS, "not_used");
+        testRunner.setProperty(SOPClassFilter.OBJECT_TYPE, SOPClassFilter.UNCOMPRESSED_SINGLE_FRAME_IMAGE);
+        testRunner.setProperty(SOPClassFilter.FILTER_SOP_CLASS, "not_used");
         dcmObjects.forEach(bytes -> {
             Attributes dcm = DicomUtils.byteArrayToAttributes(bytes);
             String sopCUID = dcm.getString(Tag.SOPClassUID);
@@ -77,19 +77,19 @@ public class SOPClassInfoTest {
             testRunner.enqueue(bytes, attr);
             testRunner.run();
         });
-        success = testRunner.getFlowFilesForRelationship(SOPCLassFilter.REL_SUCCESS);
+        success = testRunner.getFlowFilesForRelationship(SOPClassFilter.REL_SUCCESS);
         log.info("Success {}", success.size());
 
 
-        testRunner.assertAllFlowFilesTransferred(SOPCLassFilter.REL_SUCCESS, 3 * dcmObjects.size());
+        testRunner.assertAllFlowFilesTransferred(SOPClassFilter.REL_SUCCESS, 3 * dcmObjects.size());
     }
 
     @Test
     public void testProcessorFailed() {
         testRunner.setValidateExpressionUsage(false);
 
-        testRunner.setProperty(SOPCLassFilter.OBJECT_TYPE, SOPCLassFilter.COMPRESSED_SINGLE_FRAME_IMAGE);
-        testRunner.setProperty(SOPCLassFilter.FILTER_SOP_CLASS, "not_used");
+        testRunner.setProperty(SOPClassFilter.OBJECT_TYPE, SOPClassFilter.COMPRESSED_SINGLE_FRAME_IMAGE);
+        testRunner.setProperty(SOPClassFilter.FILTER_SOP_CLASS, "not_used");
         dcmObjects.forEach(bytes -> {
             Attributes dcm = DicomUtils.byteArrayToAttributes(bytes);
             String sopCUID = dcm.getString(Tag.SOPClassUID);
@@ -99,11 +99,11 @@ public class SOPClassInfoTest {
             testRunner.enqueue(bytes, attr);
             testRunner.run();
         });
-        List<MockFlowFile> err = testRunner.getFlowFilesForRelationship(SOPCLassFilter.REL_FAILURE);
+        List<MockFlowFile> err = testRunner.getFlowFilesForRelationship(SOPClassFilter.REL_FAILURE);
         log.info("Error {}", err.size());
         // Lauf 2
-        testRunner.setProperty(SOPCLassFilter.OBJECT_TYPE, SOPCLassFilter.UNCOMPRESSED_MULTI_FRAME_IMAGE);
-        testRunner.setProperty(SOPCLassFilter.FILTER_SOP_CLASS, "not_used");
+        testRunner.setProperty(SOPClassFilter.OBJECT_TYPE, SOPClassFilter.UNCOMPRESSED_MULTI_FRAME_IMAGE);
+        testRunner.setProperty(SOPClassFilter.FILTER_SOP_CLASS, "not_used");
         dcmObjects.forEach(bytes -> {
             Attributes dcm = DicomUtils.byteArrayToAttributes(bytes);
             String sopCUID = dcm.getString(Tag.SOPClassUID);
@@ -113,9 +113,9 @@ public class SOPClassInfoTest {
             testRunner.enqueue(bytes, attr);
             testRunner.run();
         });
-        err = testRunner.getFlowFilesForRelationship(SOPCLassFilter.REL_FAILURE);
+        err = testRunner.getFlowFilesForRelationship(SOPClassFilter.REL_FAILURE);
         log.info("Error {}", err.size());
-        testRunner.assertAllFlowFilesTransferred(SOPCLassFilter.REL_FAILURE, 2 * dcmObjects.size());
+        testRunner.assertAllFlowFilesTransferred(SOPClassFilter.REL_FAILURE, 2 * dcmObjects.size());
 
     }
     @Test
