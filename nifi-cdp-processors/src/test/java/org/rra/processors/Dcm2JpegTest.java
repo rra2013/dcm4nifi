@@ -23,7 +23,7 @@ import static org.rra.processors.Dcm2Jpeg.*;
 
 @Slf4j
 public class Dcm2JpegTest {
-    private static Map<String, byte[]> dcmObjects = new HashMap<>();
+    private static Map<Utils.FileInfo, byte[]> dcmObjects = new HashMap<>();
 
     private TestRunner testRunner;
 
@@ -43,11 +43,11 @@ public class Dcm2JpegTest {
     public void testDcm2JpegProcessor() {
         log.info("Begin Dcm2Jpeg Test");
 
-        Set<String> keys = dcmObjects.keySet();
+        Set<Utils.FileInfo> keys = dcmObjects.keySet();
         keys.forEach(ts -> {
             byte[] bytes = dcmObjects.get(ts);
             HashMap<String, String> attr = new HashMap<>();
-            attr.put("TransferSyntax", ts);
+            attr.put("TransferSyntax", ts.getTransferSyntax());
             testRunner.enqueue(bytes, attr);
             testRunner.run();
         });

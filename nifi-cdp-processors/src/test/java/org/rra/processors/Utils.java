@@ -62,7 +62,7 @@ public class Utils {
         });
         log.info("Read {} DICOM Files OK.", files.size());
     }
-    public static void readDicomFiles(Map<String, byte[]> dcmObjects, String path) {
+    public static void readDicomFiles(Map<FileInfo, byte[]> dcmObjects, String path) {
         Assertions.assertNotNull(dcmObjects);
 
         File dir = new File(path);
@@ -71,9 +71,13 @@ public class Utils {
             //log.debug("DICOM FIle: {}", file.getAbsolutePath());
             StringBuffer tsuid = new StringBuffer();
             byte[] bytes = readDicomFile(file, tsuid);
-            dcmObjects.put(tsuid.toString(), bytes);
-            log.info("Transfersyntax: {}", tsuid.toString());
+            dcmObjects.put(() -> tsuid.toString(), bytes);
+            log.info("Transfersyntax: {}", tsuid);
         });
         log.info("Read {} DICOM Files OK.", files.size());
+    }
+    @FunctionalInterface
+    public interface FileInfo{
+        String getTransferSyntax();
     }
 }

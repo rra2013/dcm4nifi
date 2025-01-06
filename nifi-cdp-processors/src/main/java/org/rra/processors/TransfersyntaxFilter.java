@@ -14,6 +14,7 @@ import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.processor.*;
 import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.util.StandardValidators;
+import org.rra.dcm.TransfersyntaxInfo;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -30,11 +31,25 @@ import java.util.Set;
         inputRequirement = InputRequirement.Requirement.INPUT_REQUIRED)
 
 public class TransfersyntaxFilter extends AbstractProcessor {
+    public static final String UNCOMPRESSED = "Uncompressed";
+    public static final String VALUE = "Value";
+
+    public static final PropertyDescriptor OBJECT_TYPE = new PropertyDescriptor
+            .Builder()
+            .name("objectType")
+            .displayName("Object Type")
+            .description("Type of Transfer-syntax that will be filtered. Select Uncompressed or other by Value of Transfer-Syntax. If Uncompressed is selected the Transfer-Syntax will be ignored.")
+            .required(true)
+            .allowableValues(VALUE, UNCOMPRESSED)
+            .defaultValue(VALUE)
+            .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
+            .build();
+
     public static final PropertyDescriptor TRANSFER_SYNTAX = new PropertyDescriptor
             .Builder()
             .name("transfer-syntax")
             .displayName("Transfer-Syntax")
-            .description("The The Transfer-syntax that will be filtered. A '*' will bypass the object")
+            .description("The The Transfer-syntax that will be filtered. An '*' will bypass the object")
             .required(true)
             .defaultValue("*")
             .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
@@ -59,17 +74,40 @@ public class TransfersyntaxFilter extends AbstractProcessor {
             return;
         }
 
-        if (context.getProperty(TRANSFER_SYNTAX).isSet()) {
-            String filterTSyntax = context.getProperty(TRANSFER_SYNTAX).evaluateAttributeExpressions(flowFile).getValue();
-            if (filterTSyntax.equals("*")){
-                session.getProvenanceReporter().route(flowFile, REL_SUCCESS);
-                session.transfer(flowFile, REL_SUCCESS);
-            }else{
-                String transferSyntax = flowFile.getAttribute("TransferSyntax");
-                if (transferSyntax.equalsIgnoreCase(filterTSyntax)){
+        String tsUID = flowFile.getAttribute("TransferSyntax");
+        if (null == tsUID || tsUID.isEmpty()) {
+            session.getProvenanceReporter().route(flowFile, REL_FAILURE, "TransferSyntax not valid");
+            session.transfer(flowFile, REL_FAILURE);
+            return;
+        }
+
+        if (context.getProperty(OBJECT_TYPE).isSet()) {
+            String selectedType = context.getProperty(OBJECT_TYPE).evaluateAttributeExpressions().getValue();
+            if (selectedType.equals(UNCOMPRESSED)){
+                if (TransfersyntaxInfo.isUncompressed(tsUID)){
                     session.getProvenanceReporter().route(flowFile, REL_SUCCESS);
                     session.transfer(flowFile, REL_SUCCESS);
-                } else {
+                }else{
+                    session.getProvenanceReporter().route(flowFile, REL_FAILURE);
+                    session.transfer(flowFile, REL_FAILURE);
+                }
+            }else if (selectedType.equals(VALUE)){
+                if (context.getProperty(TRANSFER_SYNTAX).isSet()) {
+                    String filterTSyntax = context.getProperty(TRANSFER_SYNTAX).evaluateAttributeExpressions(flowFile).getValue();
+                    if (filterTSyntax.equals("*")){
+                        session.getProvenanceReporter().route(flowFile, REL_SUCCESS);
+                        session.transfer(flowFile, REL_SUCCESS);
+                    }else{
+                        String transferSyntax = flowFile.getAttribute("TransferSyntax");
+                        if (transferSyntax.equalsIgnoreCase(filterTSyntax)){
+                            session.getProvenanceReporter().route(flowFile, REL_SUCCESS);
+                            session.transfer(flowFile, REL_SUCCESS);
+                        } else {
+                            session.getProvenanceReporter().route(flowFile, REL_FAILURE);
+                            session.transfer(flowFile, REL_FAILURE);
+                        }
+                    }
+                }else{
                     session.getProvenanceReporter().route(flowFile, REL_FAILURE);
                     session.transfer(flowFile, REL_FAILURE);
                 }
@@ -82,7 +120,7 @@ public class TransfersyntaxFilter extends AbstractProcessor {
 
     @Override
     protected void init(final ProcessorInitializationContext context) {
-        descriptors = List.of(TRANSFER_SYNTAX);
+        descriptors = List.of(OBJECT_TYPE, TRANSFER_SYNTAX);
         relationships = Set.of(REL_SUCCESS, REL_FAILURE);
     }
 

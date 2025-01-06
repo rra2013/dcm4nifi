@@ -59,7 +59,7 @@ public class SOPClassFilter extends AbstractProcessor {
             .Builder()
             .name("ObjectType")
             .displayName("Object Type")
-            .description("The Type of the DICOM Object that will be filtered. 'All' or Value '*' will bypass the object")
+            .description("The Type of the DICOM Object that will be filtered. 'All' or Value. An '*' will bypass the object")
             .required(true)
             .allowableValues(ALL, VALUE, UNCOMPRESSED_SINGLE_FRAME_IMAGE, COMPRESSED_SINGLE_FRAME_IMAGE,
                     UNCOMPRESSED_MULTI_FRAME_IMAGE, COMPRESSED_MULTI_FRAME_IMAGE,

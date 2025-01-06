@@ -19,9 +19,9 @@ import org.rra.dcm.SOPClassInfo;
 import java.util.*;
 
 @Slf4j
-public class SOPClassInfoTest {
-    private static List<byte[]> dcmObjects = new ArrayList<>();
+public class SOPClassFilterTest {
     private TestRunner testRunner;
+    private static List<byte[]> dcmObjects = new ArrayList<>();
     @BeforeAll
     public static void readData() {
         //Get DICOM Files
