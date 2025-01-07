@@ -49,7 +49,6 @@ public class Dicom2XmlTransformer {
         }else{
             dis.setIncludeBulkData(IncludeBulkData.NO);
         }
-
         dis.setBulkDataDescriptor(bulkDataDescriptor);
         dis.setBulkDataDirectory(null);
         dis.setBulkDataFilePrefix("blk");
@@ -57,7 +56,7 @@ public class Dicom2XmlTransformer {
         dis.setConcatenateBulkDataFiles(false);
         TransformerHandler th = getTransformerHandler(toXSLTURL(xsltPath));
         Transformer t = th.getTransformer();
-        boolean indent = true;
+        boolean indent = false;
         if (indent) {
             t.setOutputProperty(OutputKeys.INDENT, "yes");
             t.setOutputProperty("{http://xml.apache.org/xslt}indent-amount", "4");
@@ -68,7 +67,7 @@ public class Dicom2XmlTransformer {
         th.setResult(new StreamResult(out));
         SAXWriter saxWriter = new SAXWriter(th);
         saxWriter.setIncludeKeyword(true);
-        saxWriter.setIncludeNamespaceDeclaration(true);
+        saxWriter.setIncludeNamespaceDeclaration(false);
         dis.setDicomInputHandler(saxWriter);
         dis.readDataset();
     }
@@ -91,11 +90,11 @@ public class Dicom2XmlTransformer {
             throws TransformerConfigurationException {
         SAXTransformerFactory tf = (SAXTransformerFactory)
                 TransformerFactory.newInstance();
+
         if (xsltURL == null)
             return tf.newTransformerHandler();
 
-        TransformerHandler th = tf.newTransformerHandler(
-                new StreamSource(xsltURL));
+        TransformerHandler th = tf.newTransformerHandler(new StreamSource(xsltURL));
         return th;
     }
 }

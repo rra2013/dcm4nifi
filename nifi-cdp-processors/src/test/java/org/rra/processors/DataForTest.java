@@ -14,6 +14,7 @@ import static org.rra.processors.Utils.readDicomFiles;
 public class DataForTest {
 
     public static final String DICOM_PATH = "/mnt/f/DICOM/CT/ct_IVRLE";
+    public static final String DICOM_PATH_SR = "/mnt/f/DICOM/SR/";
     public static final String DICOM_PATH_DEF = "/mnt/f/DICOM/CT/ct_IVRLE/";
     public static final String DICOM_SERVER_HOST = "localhost";
     public static final String DICOM_SERVER_AET = "DCM4CHEE";
@@ -21,10 +22,12 @@ public class DataForTest {
     public static final int DICOM_SERVER_PORT = 11112;
     public static final boolean DICOM_INTEGRATION_TESTS = false;
     public static final List<byte[]> DCMOBJECTS = new ArrayList<>();
+    public static final List<byte[]> SR_OBJECTS = new ArrayList<>();
     public static final Map<FileInfo, byte[]> DCMOBJECTS_UNCOMPRESSED =new HashMap<>();
 
     static {
         readDicomFiles(DCMOBJECTS, DICOM_PATH);
+        readDicomFiles(SR_OBJECTS, DICOM_PATH_SR);
         readDicomFiles(DCMOBJECTS_UNCOMPRESSED, DICOM_PATH_DEF);
     }
 
