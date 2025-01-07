@@ -40,6 +40,9 @@ public class Dcm2XmlTest {
     @Test
     public void testProcessorSuccess() {
         log.info("$ $ $ $ Run DCM2XML $ $ $ $ $");
+        testRunner.setValidateExpressionUsage(false);
+        testRunner.setProperty(Dcm2Xml.BULK_DATA, Dcm2Xml.INCLUDE_BULK_DATA);
+
         dcmObjects.forEach(dcmFileArray -> {
             testRunner.enqueue(dcmFileArray);
             testRunner.run();
@@ -47,13 +50,29 @@ public class Dcm2XmlTest {
         });
         List<MockFlowFile> success = testRunner.getFlowFilesForRelationship(Dcm2Xml.REL_SUCCESS);
         log.info("Size of success: {}", success.size());
+
+        testRunner.setProperty(Dcm2Xml.BULK_DATA, Dcm2Xml.NO_BULK_DATA);
+        dcmObjects.forEach(dcmFileArray -> {
+            testRunner.enqueue(dcmFileArray);
+            testRunner.run();
+            log.info("Run with size {}", dcmFileArray.length);
+        });
+
+        testRunner.setProperty(Dcm2Xml.BULK_DATA, Dcm2Xml.NO_BULK_DATA);
+        testRunner.setProperty(Dcm2Xml.XSL_TRANSFORM_PATH, "/opt/dcm4che/etc/dcm2xml/srdump.xsl");
+        dcmObjects.forEach(dcmFileArray -> {
+            testRunner.enqueue(dcmFileArray);
+            testRunner.run();
+            log.info("Run with size {}", dcmFileArray.length);
+        });
+
         success.forEach(mockFlowFile -> {
             byte[] readAnonym = mockFlowFile.toByteArray();
             try(ByteArrayInputStream ba = new ByteArrayInputStream(readAnonym)){
                 try(BufferedInputStream bif = new BufferedInputStream(ba)){
                     String xml = IOUtils.toString(bif, StandardCharsets.UTF_8);
-                    log.info("size of XML: {}", xml.getBytes().length);
-                    System.out.println(xml);
+                    log.info("size of Object: {}", xml.getBytes().length);
+                    //System.out.println(xml);
                 }
             } catch (IOException e) {
                 throw new RuntimeException(e);
