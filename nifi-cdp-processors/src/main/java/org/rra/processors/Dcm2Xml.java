@@ -35,6 +35,7 @@ public class Dcm2Xml extends AbstractProcessor {
 
     public static final String INCLUDE_BULK_DATA = "Include Bulk Data";
     public static final String NO_BULK_DATA = "No Bulk Data";
+    public static final String DEFAULT_BULK_URI = "Default";
 
     public static final PropertyDescriptor BULK_DATA = new PropertyDescriptor
             .Builder()
@@ -42,8 +43,8 @@ public class Dcm2Xml extends AbstractProcessor {
             .displayName("Bulk Data")
             .description("Include bulkdata in XML output; by default, references to bulkdata are included.")
             .required(true)
-            .allowableValues(NO_BULK_DATA, INCLUDE_BULK_DATA)
-            .defaultValue(NO_BULK_DATA)
+            .allowableValues(DEFAULT_BULK_URI,NO_BULK_DATA, INCLUDE_BULK_DATA)
+            .defaultValue(DEFAULT_BULK_URI)
             .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
             .build();
 
@@ -75,14 +76,16 @@ public class Dcm2Xml extends AbstractProcessor {
         if (flowFile == null) {
             return;
         }
-        final boolean inclBulk;
+        final Boolean inclBulk;
         final String xslTransformPath;
         if (context.getProperty(BULK_DATA).isSet()){
             String selectedType = context.getProperty(BULK_DATA).evaluateAttributeExpressions().getValue();
             if (selectedType.equalsIgnoreCase(INCLUDE_BULK_DATA)){
-              inclBulk = true;
-            } else{
-                inclBulk = false;
+              inclBulk = Boolean.TRUE;
+            } else if (selectedType.equalsIgnoreCase(NO_BULK_DATA)){
+                inclBulk = Boolean.FALSE;
+            }else{
+                inclBulk = null;
             }
             //
             xslTransformPath = context.getProperty(XSL_TRANSFORM_PATH).evaluateAttributeExpressions(flowFile).getValue();

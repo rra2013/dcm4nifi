@@ -26,7 +26,7 @@ public class Dicom2XmlTransformer {
     private static final String XML_1_0 = "1.0";
     private static final String xmlVersion = XML_1_0;
 
-    public static void transform(InputStream in, OutputStream out, boolean includeBulkData, String xsltPath) throws IOException, TransformerConfigurationException {
+    public static void transform(InputStream in, OutputStream out, Boolean includeBulkData, String xsltPath) throws IOException, TransformerConfigurationException {
 
         DicomInputStream dis = new DicomInputStream(in);
         try {
@@ -39,12 +39,14 @@ public class Dicom2XmlTransformer {
 
     }
 
-    private static void parse(DicomInputStream dis, OutputStream out, boolean includeBulkData, String xsltPath) throws IOException,
+    private static void parse(DicomInputStream dis, OutputStream out, Boolean includeBulkData, String xsltPath) throws IOException,
             TransformerConfigurationException {
 
         BasicBulkDataDescriptor bulkDataDescriptor = new BasicBulkDataDescriptor();
         bulkDataDescriptor.excludeDefaults(false);
-        if (includeBulkData){
+        if (null == includeBulkData){
+            dis.setIncludeBulkData(IncludeBulkData.URI);
+        }else if (includeBulkData){
             dis.setIncludeBulkData(IncludeBulkData.YES);
         }else{
             dis.setIncludeBulkData(IncludeBulkData.NO);
