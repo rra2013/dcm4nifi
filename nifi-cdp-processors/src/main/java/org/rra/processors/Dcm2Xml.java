@@ -51,7 +51,7 @@ public class Dcm2Xml extends AbstractProcessor {
             .Builder()
             .name("xsl-file")
             .displayName("XSL File Path")
-            .description("Include bulkdata in XML output; by default, references to bulkdata are included.")
+            .description("Apply XSLT stylesheet specified by file path or URL.")
             .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
             .build();
 
