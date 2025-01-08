@@ -30,7 +30,6 @@ import java.util.Set;
 @CapabilityDescription("A DICOM XML Converter based on dcm4che. Will convert a DICOM object in XML during the NIFI Workflows")
 @UseCase(description = "Convert a DICOM Object in XML",
         inputRequirement = InputRequirement.Requirement.INPUT_REQUIRED)
-
 public class Dcm2Xml extends AbstractProcessor {
 
     public static final String INCLUDE_BULK_DATA = "Include Bulk Data";

@@ -16,6 +16,7 @@ public class DataForTest {
     public static final String DICOM_PATH = "/mnt/f/DICOM/CT/ct_IVRLE";
     public static final String DICOM_PATH_SR = "/mnt/f/DICOM/SR/";
     public static final String DICOM_PATH_DEF = "/mnt/f/DICOM/CT/ct_IVRLE/";
+    public static final String DICOM_PATH_PDF = "/mnt/f/DICOM/pdf/";
     public static final String DICOM_SERVER_HOST = "localhost";
     public static final String DICOM_SERVER_AET = "DCM4CHEE";
     public static final String DICOM_SERVER_MOVE_AET = "DCM4NIFI";
@@ -23,10 +24,12 @@ public class DataForTest {
     public static final boolean DICOM_INTEGRATION_TESTS = false;
     public static final List<byte[]> DCMOBJECTS = new ArrayList<>();
     public static final List<byte[]> SR_OBJECTS = new ArrayList<>();
+    public static final List<byte[]> PDF_OBJECTS = new ArrayList<>();
     public static final Map<FileInfo, byte[]> DCMOBJECTS_UNCOMPRESSED =new HashMap<>();
 
     static {
         readDicomFiles(DCMOBJECTS, DICOM_PATH);
+        readDicomFiles(PDF_OBJECTS, DICOM_PATH_PDF);
         readDicomFiles(SR_OBJECTS, DICOM_PATH_SR);
         readDicomFiles(DCMOBJECTS_UNCOMPRESSED, DICOM_PATH_DEF);
     }
