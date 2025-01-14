@@ -13,12 +13,11 @@ import org.apache.nifi.flowfile.attributes.CoreAttributes;
 import org.apache.nifi.processor.*;
 import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.util.StandardValidators;
-import org.rra.dcm.Dicom2XmlTransformer;
+import org.rra.dcm.Dicom2JsonTransformer;
 
 import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -26,12 +25,11 @@ import java.util.Set;
 @SupportsBatching
 @InputRequirement(InputRequirement.Requirement.INPUT_REQUIRED)
 @SideEffectFree
-@Tags({"CDP", "DICOM", "dcm2xml","xml"})
-@CapabilityDescription("A DICOM XML Converter based on dcm4che. Will convert a DICOM object in XML during the NIFI Workflows")
-@UseCase(description = "Convert a DICOM Object in XML",
+@Tags({"CDP", "DICOM", "dcm2json", "json"})
+@CapabilityDescription("A DICOM JSON Converter based on dcm4che. Will convert a DICOM object in JSON during the NIFI Workflows")
+@UseCase(description = "Convert a DICOM Object in JSON",
         inputRequirement = InputRequirement.Requirement.INPUT_REQUIRED)
-public class Dcm2Xml extends AbstractProcessor {
-
+public class Dcm2Json extends AbstractProcessor {
     public static final String INCLUDE_BULK_DATA = "Include Bulk Data";
     public static final String NO_BULK_DATA = "No Bulk Data";
     public static final String DEFAULT_BULK_URI = "Default";
@@ -42,16 +40,29 @@ public class Dcm2Xml extends AbstractProcessor {
             .displayName("Bulk Data")
             .description("Include bulkdata in XML output; by default, references to bulkdata are included.")
             .required(true)
-            .allowableValues(DEFAULT_BULK_URI,NO_BULK_DATA, INCLUDE_BULK_DATA)
+            .allowableValues(DEFAULT_BULK_URI, NO_BULK_DATA, INCLUDE_BULK_DATA)
             .defaultValue(NO_BULK_DATA)
             .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
             .build();
 
-    public static final PropertyDescriptor XSL_TRANSFORM_PATH = new PropertyDescriptor
+    public static final PropertyDescriptor INDENT_JSON = new PropertyDescriptor
             .Builder()
-            .name("xsl-file")
-            .displayName("XSL File Path")
-            .description("Apply XSLT stylesheet specified by file path or URL.")
+            .name("indent")
+            .displayName("Indent")
+            .description("Use additional whitespace in JSON output.")
+            .allowableValues("true", "false")
+            .defaultValue("true")
+            .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
+            .build();
+
+    public static final PropertyDescriptor ENCODE_AS_NUMBER = new PropertyDescriptor
+            .Builder()
+            .name("encode-as-number")
+            .displayName("Encode as number")
+            .description("Encode IS, SV and UV values in the range [-(2^53)+1, (2^53)-1] and valid DS values as JSON numbers. By default DS, IS, SV and UV values are encoded as JSON strings.")
+            .allowableValues("true", "false")
+            .required(true)
+            .defaultValue("false")
             .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
             .build();
 
@@ -76,26 +87,26 @@ public class Dcm2Xml extends AbstractProcessor {
             return;
         }
         final Boolean inclBulk;
-        final String xslTransformPath;
-        if (context.getProperty(BULK_DATA).isSet()){
+        final boolean indent;
+        if (context.getProperty(BULK_DATA).isSet()) {
             String selectedType = context.getProperty(BULK_DATA).evaluateAttributeExpressions().getValue();
-            if (selectedType.equalsIgnoreCase(INCLUDE_BULK_DATA)){
-              inclBulk = Boolean.TRUE;
-            } else if (selectedType.equalsIgnoreCase(NO_BULK_DATA)){
+            if (selectedType.equalsIgnoreCase(INCLUDE_BULK_DATA)) {
+                inclBulk = Boolean.TRUE;
+            } else if (selectedType.equalsIgnoreCase(NO_BULK_DATA)) {
                 inclBulk = Boolean.FALSE;
-            }else{
+            } else {
                 inclBulk = null;
             }
             //
-            xslTransformPath = context.getProperty(XSL_TRANSFORM_PATH).evaluateAttributeExpressions(flowFile).getValue();
-        }else{
+            indent = context.getProperty(INDENT_JSON).evaluateAttributeExpressions(flowFile).asBoolean();
+        } else {
             return;
         }
         try {
             flowFile = session.write(flowFile, (in, out) -> {
                 try (OutputStream buffOut = new BufferedOutputStream(out)) {
                     try {
-                        Dicom2XmlTransformer.transform(in, buffOut, inclBulk, xslTransformPath);
+                        Dicom2JsonTransformer.transform(in, buffOut, inclBulk, indent);
                     } catch (Exception e) {
                         throw new IOException(e);
                     }
@@ -103,10 +114,10 @@ public class Dcm2Xml extends AbstractProcessor {
                     throw new RuntimeException(e);
                 }
             });
-            String fileName = flowFile.getAttribute(CoreAttributes.UUID.key()) + ".xml";
+            String fileName = flowFile.getAttribute(CoreAttributes.UUID.key()) + ".json";
             flowFile = session.putAttribute(flowFile, CoreAttributes.FILENAME.key(), fileName);
-            flowFile = session.putAttribute(flowFile, CoreAttributes.MIME_TYPE.key(), "application/xml");
-            session.getProvenanceReporter().modifyContent(flowFile, "dcm2xml");
+            flowFile = session.putAttribute(flowFile, CoreAttributes.MIME_TYPE.key(), "application/json");
+            session.getProvenanceReporter().modifyContent(flowFile, "dcm2json");
             session.transfer(flowFile, REL_SUCCESS);
         } catch (Exception e) {
             log.error(e.getMessage());
@@ -116,7 +127,7 @@ public class Dcm2Xml extends AbstractProcessor {
 
     @Override
     protected void init(final ProcessorInitializationContext context) {
-        descriptors = List.of(BULK_DATA, XSL_TRANSFORM_PATH);
+        descriptors = List.of(BULK_DATA, INDENT_JSON, ENCODE_AS_NUMBER);
         relationships = Set.of(REL_SUCCESS, REL_FAILURE);
     }
 

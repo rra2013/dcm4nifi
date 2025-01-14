@@ -142,6 +142,8 @@ public class Dcm2XmlTest {
                         String dump = IOUtils.toString(inputStream, StandardCharsets.UTF_8);
                         long size = dump.getBytes(StandardCharsets.UTF_8).length;
                         //System.out.println("Dump = " + dump);
+
+                        
                         Assertions.assertTrue(size > 0);
                     }catch (Exception e) {
                         throw new RuntimeException(e);

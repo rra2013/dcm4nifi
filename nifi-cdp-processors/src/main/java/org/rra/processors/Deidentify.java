@@ -35,7 +35,6 @@ public class Deidentify extends AbstractProcessor {
             .Builder()
             .name("Model")
             .displayName("Model")
-            .required(true)
             .description("The deidentify model for the process")
             .required(true)
             .defaultValue("deidentify.json")

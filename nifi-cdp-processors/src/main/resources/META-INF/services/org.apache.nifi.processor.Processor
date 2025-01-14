@@ -14,3 +14,4 @@ org.rra.processors.MoveScu
 org.rra.processors.GetScu
 org.rra.processors.Dcm2Jpeg
 org.rra.processors.Dcm2Pdf
+org.rra.processors.Dcm2Json
