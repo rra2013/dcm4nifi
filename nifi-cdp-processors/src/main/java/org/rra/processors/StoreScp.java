@@ -28,7 +28,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 @Slf4j
 @Tags({"DICOM","Store-SCP", "CDP"})
-@CapabilityDescription("DICOM Store-SCP based on dcm4che. Store a DICOM Object to a Flow File.")
+@CapabilityDescription("DICOM Store-SCP. Store a DICOM Object to a Flow File.")
 @UseCase(description = "Receives DICOM Images via TCP/IP. Listening on port and bind to IP address. This DICOM Store-SCP receives the DICOM objects and create a Flow File with the dcm4che Attributes as File content. Images or PDFs will be included. The hole DICOM Object will be transferred in Default Transfer syntax Explicit Little Endian.")
 @WritesAttributes({
         @WritesAttribute(attribute="AffectedSOPClassUID", description="The Affected SOP Class UID"),

@@ -25,7 +25,7 @@ import java.util.Set;
 @SystemResourceConsideration(resource = SystemResource.CPU)
 @Slf4j
 @Tags({"DICOM","Store-SCU","CDP"})
-@CapabilityDescription("DICOM Store-SCU based on dcm4che. Store a Flow File with DICOM body to remote destination.")
+@CapabilityDescription("DICOM Store-SCU. Store a Flow File with DICOM body to remote destination.")
 @UseCase(description = "DICOM Store-SCU can be used for Sending DICOM Data to remote SCP",
         inputRequirement = InputRequirement.Requirement.INPUT_REQUIRED)
 

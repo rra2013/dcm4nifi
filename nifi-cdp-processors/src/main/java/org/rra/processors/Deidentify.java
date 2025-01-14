@@ -25,7 +25,7 @@ import java.util.concurrent.atomic.AtomicReference;
 @SideEffectFree
 @SystemResourceConsideration(resource = SystemResource.CPU)
 @Tags({"CDP","DICOM", "deidentify"})
-@CapabilityDescription("A DICOM De-Identifier based on dcm4che. Will deidentify DICOM Objects during the NIFI Workflows")
+@CapabilityDescription("A DICOM De-Identifier. Will deidentify DICOM Objects during the NIFI Workflows")
 @UseCase(description = "De-Identifier can be used for anonymizing DICOM Meta Data of DICOM 3 Objects",
         inputRequirement = InputRequirement.Requirement.INPUT_REQUIRED)
 public class Deidentify extends AbstractProcessor {

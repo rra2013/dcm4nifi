@@ -30,7 +30,7 @@ import java.util.Set;
 @InputRequirement(InputRequirement.Requirement.INPUT_REQUIRED)
 @SideEffectFree
 @Tags({"CDP", "DICOM", "dcm2jpeg","jpg"})
-@CapabilityDescription("A DICOM Jpeg Converter based on dcm4che. Will convert a DICOM object in Jpeg during the NIFI Workflows")
+@CapabilityDescription("A DICOM Jpeg Converter. Will convert a DICOM object in Jpeg during the NIFI Workflows")
 @UseCase(description = "Convert a DICOM Object in Jpeg",
         inputRequirement = InputRequirement.Requirement.INPUT_REQUIRED)
 

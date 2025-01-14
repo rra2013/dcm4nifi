@@ -26,7 +26,7 @@ import java.util.Set;
 @InputRequirement(InputRequirement.Requirement.INPUT_REQUIRED)
 @SideEffectFree
 @Tags({"CDP", "DICOM", "relais"})
-@CapabilityDescription("A DICOM Relais based on dcm4che. Will route on CALLED AET during the NIFI Workflows")
+@CapabilityDescription("A DICOM Relais. Will route on CALLED AET during the NIFI Workflows")
 @UseCase(description = "DICOM Relais can be used for routing of DICOM 3 Objects to remote destinations.",
         inputRequirement = InputRequirement.Requirement.INPUT_REQUIRED)
 

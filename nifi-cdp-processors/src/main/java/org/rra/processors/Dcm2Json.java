@@ -26,7 +26,7 @@ import java.util.Set;
 @InputRequirement(InputRequirement.Requirement.INPUT_REQUIRED)
 @SideEffectFree
 @Tags({"CDP", "DICOM", "dcm2json", "json"})
-@CapabilityDescription("A DICOM JSON Converter based on dcm4che. Will convert a DICOM object in JSON during the NIFI Workflows")
+@CapabilityDescription("A DICOM JSON Converter. Will convert a DICOM object in JSON during the NIFI Workflows")
 @UseCase(description = "Convert a DICOM Object in JSON",
         inputRequirement = InputRequirement.Requirement.INPUT_REQUIRED)
 public class Dcm2Json extends AbstractProcessor {
