@@ -8,6 +8,7 @@ import org.apache.nifi.util.TestRunners;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.rra.hl7.HL7Transformer;
 
 import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
@@ -16,12 +17,13 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 @Slf4j
-public class HL72XmlTest {
+public class HL72JsonTest {
+
     private TestRunner testRunner;
 
     @BeforeEach
     public void init() {
-        testRunner = TestRunners.newTestRunner(HL72Xml.class);
+        testRunner = TestRunners.newTestRunner(HL72Json.class);
     }
 
     @Test
@@ -34,11 +36,12 @@ public class HL72XmlTest {
                 + "AL1||SEV|001^POLLEN\r"
                 + "GT1||0222PL|NOTREAL^BOB^B||STREET^OTHER STREET^CITY^ST^77787|(444)999-3333|(222)777-5555||||MO|111-33-5555||||NOTREAL GILL N|STREET^OTHER STREET^CITY^ST^99999|(111)222-3333\r"
                 + "IN1||022254P|4558PD|BLUE CROSS|STREET^OTHER STREET^CITY^ST^00990||(333)333-6666||221K|LENIX|||19980515|19990515|||PATIENT01 TEST D||||||||||||||||||02LL|022LP554";
+
         testRunner.enqueue(msg);
         testRunner.run();
-        List<MockFlowFile> success = testRunner.getFlowFilesForRelationship(HL72Xml.REL_SUCCESS);
+        List<MockFlowFile> success = testRunner.getFlowFilesForRelationship(HL72Json.REL_SUCCESS);
         log.info("Success :{}", success.size());
-        testRunner.assertAllFlowFilesTransferred(HL72Xml.REL_SUCCESS, 1);
+        testRunner.assertAllFlowFilesTransferred(HL72Json.REL_SUCCESS, 1);
         success.forEach(mockFlowFile -> {
             byte[] byteArray = mockFlowFile.toByteArray();
             try (ByteArrayInputStream ba = new ByteArrayInputStream(byteArray)) {
@@ -51,5 +54,6 @@ public class HL72XmlTest {
             }
 
         });
+
     }
 }

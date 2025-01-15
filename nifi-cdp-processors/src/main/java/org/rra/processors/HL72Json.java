@@ -15,7 +15,9 @@ import org.apache.nifi.processor.*;
 import org.apache.nifi.processor.exception.ProcessException;
 import org.rra.hl7.HL7Transformer;
 
-import java.io.*;
+import java.io.BufferedOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -25,12 +27,11 @@ import java.util.Set;
 @SideEffectFree
 @SystemResourceConsideration(resource = SystemResource.CPU)
 @Slf4j
-@Tags({"HL7", "HL72Xml", "CDP"})
-@CapabilityDescription("Transform a HL7 MLLP Message to XML.")
+@Tags({"HL7", "HL72Json", "CDP"})
+@CapabilityDescription("Transform a HL7 MLLP Message to JSON.")
 @UseCase(description = "Processing HL7 Messages",
         inputRequirement = InputRequirement.Requirement.INPUT_REQUIRED)
-
-public class HL72Xml extends AbstractProcessor {
+public class HL72Json extends AbstractProcessor {
     public static final Relationship REL_SUCCESS = new Relationship.Builder()
             .name("success")
             .description("Transform success")
@@ -43,36 +44,6 @@ public class HL72Xml extends AbstractProcessor {
 
     private Set<Relationship> relationships;
     private List<PropertyDescriptor> descriptors;
-
-    @Override
-    public void onTrigger(ProcessContext context, ProcessSession session) throws ProcessException {
-        FlowFile flowFile = session.get();
-        if (flowFile == null) {
-            return;
-        }
-        try {
-            flowFile = session.write(flowFile, (in, out) -> {
-                try (OutputStream buffOut = new BufferedOutputStream(out)) {
-                    try {
-                        HL7Transformer.transform2xml(in, buffOut);
-                    } catch (Exception e) {
-                        throw new IOException(e);
-                    }
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-            });
-            String fileName = flowFile.getAttribute(CoreAttributes.UUID.key()) + ".xml";
-            flowFile = session.putAttribute(flowFile, CoreAttributes.FILENAME.key(), fileName);
-            flowFile = session.putAttribute(flowFile, CoreAttributes.MIME_TYPE.key(), "application/xml");
-            session.getProvenanceReporter().modifyContent(flowFile, "hl72xml");
-            session.transfer(flowFile, REL_SUCCESS);
-        } catch (Exception e) {
-            log.error(e.getMessage());
-            session.transfer(flowFile, REL_FAILURE);
-        }
-    }
-
     @Override
     protected void init(final ProcessorInitializationContext context) {
         relationships = Set.of(REL_SUCCESS, REL_FAILURE);
@@ -89,4 +60,32 @@ public class HL72Xml extends AbstractProcessor {
         return descriptors;
     }
 
+    @Override
+    public void onTrigger(ProcessContext context, ProcessSession session) throws ProcessException {
+        FlowFile flowFile = session.get();
+        if (flowFile == null) {
+            return;
+        }
+        try {
+            flowFile = session.write(flowFile, (in, out) -> {
+                try (OutputStream buffOut = new BufferedOutputStream(out)) {
+                    try {
+                        HL7Transformer.transform2Json(in, buffOut);
+                    } catch (Exception e) {
+                        throw new IOException(e);
+                    }
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            });
+            String fileName = flowFile.getAttribute(CoreAttributes.UUID.key()) + ".json";
+            flowFile = session.putAttribute(flowFile, CoreAttributes.FILENAME.key(), fileName);
+            flowFile = session.putAttribute(flowFile, CoreAttributes.MIME_TYPE.key(), "application/json");
+            session.getProvenanceReporter().modifyContent(flowFile, "hl72json");
+            session.transfer(flowFile, REL_SUCCESS);
+        } catch (Exception e) {
+            log.error(e.getMessage());
+            session.transfer(flowFile, REL_FAILURE);
+        }
+    }
 }
