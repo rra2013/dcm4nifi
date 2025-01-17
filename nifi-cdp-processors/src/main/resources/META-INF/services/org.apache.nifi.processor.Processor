@@ -16,3 +16,4 @@ org.rra.processors.Dcm2Jpeg
 org.rra.processors.Dcm2Pdf
 org.rra.processors.Dcm2Json
 org.rra.processors.HL72Json
+org.rra.processors.HL7Send

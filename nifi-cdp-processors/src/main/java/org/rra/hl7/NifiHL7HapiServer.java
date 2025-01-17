@@ -41,6 +41,7 @@ public class NifiHL7HapiServer implements IHL7Server, ReceivingApplication<Messa
     public final static String SEND_FACILITY = "SendingFacility";
     public final static String RECEIVE_APP = " ReceivingApplication";
     public final static String RECEIVE_FACILITY = "ReceivingFacility";
+    public final static String VERSION = "Version";
 
     private final AtomicReference<ProcessSessionFactory> sessionFactory;
     private final CountDownLatch sessionFactorySetSignal;
@@ -123,9 +124,11 @@ public class NifiHL7HapiServer implements IHL7Server, ReceivingApplication<Messa
                 String receivingFacility;
                 String msgCode;
                 String trigEvent;
+                String version;
                 try (OutputStream flowFileOutputStream = processSession.write(flowFile)) {
                     copyMessage(encodedMessage, flowFileOutputStream);
                     GenericMessage msg =  (GenericMessage) context.getPipeParser().parse(encodedMessage);
+                    version = msg.getVersion();
                     Terser t = new Terser(msg);
                     sendingApp = t.get("/MSH-3-1");
                     sendingFacility = t.get("/MSH-4-1");
@@ -143,6 +146,7 @@ public class NifiHL7HapiServer implements IHL7Server, ReceivingApplication<Messa
                     throw new IOException(ioException.getMessage());
                 }
                 try {
+                    flowFile = processSession.putAttribute(flowFile, VERSION , version);
                     flowFile = processSession.putAttribute(flowFile, SEND_APP , sendingApp);
                     flowFile = processSession.putAttribute(flowFile, SEND_FACILITY, sendingFacility);
                     flowFile = processSession.putAttribute(flowFile, RECEIVE_APP, receivingApp);
