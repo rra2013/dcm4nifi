@@ -93,8 +93,6 @@ public class HL7Test {
                     System.out.println("adtA01 = " + adtA01.encode().replaceAll("\\r", "\r\n"));
 
                 }
-                ca.uhn.hl7v2.model.v23.segment.EVN test = new ca.uhn.hl7v2.model.v23.segment.EVN(null,null);
-                test.getDateTimePlannedEvent().getTimeOfAnEvent().setValue(new Date());
                 //String encode = hapiMsg.encode().replaceAll("\\r", "\r\n");
                 /*try(ByteArrayInputStream bais = new ByteArrayInputStream(encode.getBytes())) {
                     IOUtils.copy(bais, System.out);
