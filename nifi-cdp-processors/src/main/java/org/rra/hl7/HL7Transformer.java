@@ -19,12 +19,13 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 
 public class HL7Transformer {
-    private final static HapiContext context = new DefaultHapiContext();
-    private final static PipeParser parser = context.getPipeParser();
+    private final static HapiContext CONTEXT = new DefaultHapiContext();
+    private final static PipeParser PIPE_PARSER = CONTEXT.getPipeParser();
+    private final static XMLParser XML_PARSER = CONTEXT.getXMLParser();
 
     static {
-        context.getParserConfiguration().setIdGenerator(new InMemoryIDGenerator());
-        context.getParserConfiguration().setValidating(false);
+        CONTEXT.getParserConfiguration().setIdGenerator(new InMemoryIDGenerator());
+        CONTEXT.getParserConfiguration().setValidating(false);
     }
 
     public static void transform2xml(InputStream in, OutputStream buffOut) throws Exception {
@@ -32,10 +33,10 @@ public class HL7Transformer {
         try (BufferedInputStream bis = new BufferedInputStream(in)) {
             String result = IOUtils.toString(bis, StandardCharsets.UTF_8);
             //log.debug("Result: \n {}", result.replaceAll("\\r", "\r\n"));
-            Message hapiMsg = parser.parse(result);
-            XMLParser xmlParser = context.getXMLParser();
+            Message hapiMsg = PIPE_PARSER.parse(result);
+            XMLParser xmlParser = CONTEXT.getXMLParser();
             String xmlDoc = xmlParser.encode(hapiMsg, "XML");
-            //log.debug(xmlDoc);
+
             try (ByteArrayInputStream xmlArray = new ByteArrayInputStream(xmlDoc.getBytes(StandardCharsets.UTF_8))) {
                 try (BufferedInputStream xmlIn = new BufferedInputStream(xmlArray)) {
                     IO.copy(xmlIn, buffOut);
@@ -44,12 +45,21 @@ public class HL7Transformer {
         }
     }
 
+    public static void transformFromXml(InputStream in, OutputStream buffOut) throws Exception {
+        try(BufferedInputStream bis = new BufferedInputStream(in)) {
+            String msg_xml = IOUtils.toString(bis, StandardCharsets.UTF_8);
+            Message message = XML_PARSER.parse(msg_xml);
+            String pipe_msg = PIPE_PARSER.encode(message);
+            IOUtils.write(pipe_msg, buffOut);
+        }
+    }
+
     public static void transform2Json(InputStream in, OutputStream buffOut) throws Exception {
 
         try (BufferedInputStream bis = new BufferedInputStream(in)) {
             String result = IOUtils.toString(bis, StandardCharsets.UTF_8);
-            Message hapiMsg = parser.parse(result);
-            XMLParser xmlParser = context.getXMLParser();
+            Message hapiMsg = PIPE_PARSER.parse(result);
+            XMLParser xmlParser = CONTEXT.getXMLParser();
             String xmlDoc = xmlParser.encode(hapiMsg, "XML");
             XmlMapper xmlMapper = new XmlMapper();
             JsonNode node = xmlMapper.readTree(xmlDoc.getBytes());

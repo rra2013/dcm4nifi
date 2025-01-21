@@ -11,8 +11,10 @@ import ca.uhn.hl7v2.model.Message;
 
 
 import ca.uhn.hl7v2.model.Varies;
+import ca.uhn.hl7v2.model.v22.message.ADT_A05;
 import ca.uhn.hl7v2.model.v22.segment.EVN;
 import ca.uhn.hl7v2.model.v22.segment.MSH;
+import ca.uhn.hl7v2.model.v23.message.ADT_A04;
 import ca.uhn.hl7v2.model.v25.datatype.CE;
 import ca.uhn.hl7v2.model.v25.datatype.ST;
 import ca.uhn.hl7v2.model.v25.datatype.TX;
@@ -23,6 +25,7 @@ import ca.uhn.hl7v2.model.v25.segment.OBR;
 import ca.uhn.hl7v2.model.v25.segment.OBX;
 import ca.uhn.hl7v2.parser.Parser;
 import ca.uhn.hl7v2.parser.PipeParser;
+import ca.uhn.hl7v2.parser.XMLParser;
 import ca.uhn.hl7v2.protocol.ReceivingApplication;
 import ca.uhn.hl7v2.protocol.ReceivingApplicationException;
 import ca.uhn.hl7v2.util.idgenerator.InMemoryIDGenerator;
@@ -34,10 +37,9 @@ import org.apache.commons.io.IOUtils;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.rra.hl7.HL7Sender;
+import org.rra.hl7.HL7Transformer;
 
-import java.io.BufferedInputStream;
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.Map;
@@ -84,14 +86,17 @@ public class HL7Test {
                 System.out.println("ack = " + ack);
 
                 if (version.equals("2.2")) {
-                    ca.uhn.hl7v2.model.v22.message.ADT_A01 adtA01 =
-                            (ca.uhn.hl7v2.model.v22.message.ADT_A01) hapiMsg;
-                    MSH msh = adtA01.getMSH();
-                    EVN evn = adtA01.getEVN();
-                    evn.getDateTimeOfEvent().getTimeOfAnEvent().setValue("20250116000000");
+                    if (hapiMsg.getClass().equals(ca.uhn.hl7v2.model.v22.message.ADT_A01.class)) {
 
-                    System.out.println("adtA01 = " + adtA01.encode().replaceAll("\\r", "\r\n"));
 
+                        ca.uhn.hl7v2.model.v22.message.ADT_A01 adtA01 =
+                                (ca.uhn.hl7v2.model.v22.message.ADT_A01) hapiMsg;
+                        MSH msh = adtA01.getMSH();
+                        EVN evn = adtA01.getEVN();
+                        evn.getDateTimeOfEvent().getTimeOfAnEvent().setValue("20250116000000");
+
+                        System.out.println("adtA01 = " + adtA01.encode().replaceAll("\\r", "\r\n"));
+                    }
                 }
                 //String encode = hapiMsg.encode().replaceAll("\\r", "\r\n");
                 /*try(ByteArrayInputStream bais = new ByteArrayInputStream(encode.getBytes())) {
@@ -207,7 +212,38 @@ public class HL7Test {
         //connection.close();
         server.stopAndWait();
     }
+    @Test
+    public void test_xml2hl7(){
+        File xml = new File("src/test/resources/hl7xml/ADT_A04_v23.xml");
+        System.out.println("xml.exists() = " + xml.exists());
+        XMLParser xmlParser = context.getXMLParser();
+        try(FileInputStream fis = new FileInputStream(xml)){
+            String msg_xml = IOUtils.toString(fis, StandardCharsets.UTF_8);
+            Message message = xmlParser.parse(msg_xml);
+            System.out.println("Read: XML data OK: "+message.getClass().getName());
+            PipeParser pipeParser = context.getPipeParser();
+            String pipe_msg = pipeParser.encode(message);
+            System.out.println(pipe_msg.replaceAll("\\r", "\r\n"));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        //Test Lib
+        try(FileInputStream fis = new FileInputStream(xml)){
+            try(ByteArrayOutputStream baos = new ByteArrayOutputStream()){
+                HL7Transformer.transformFromXml(fis, baos);
+                byte[] byteArray = baos.toByteArray();
+                String hl7 = IOUtils.toString(byteArray);
+                System.out.println(hl7.replaceAll("\\r", "\r\n"));
+            }
 
+        } catch (FileNotFoundException e) {
+            throw new RuntimeException(e);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+
+
+    }
     public class ExampleReceiverApplication implements ReceivingApplication<Message>{
         @Override
         public Message processMessage(Message message, Map<String, Object> map) throws ReceivingApplicationException, HL7Exception {

@@ -73,7 +73,7 @@ public class Dcm2Json extends AbstractProcessor {
             .build();
     public static final Relationship REL_FAILURE = new Relationship.Builder()
             .name("failure")
-            .description("DICOM 2 XML Failed").build();
+            .description("DICOM 2 JSON Failed").build();
 
 
     private List<PropertyDescriptor> descriptors;

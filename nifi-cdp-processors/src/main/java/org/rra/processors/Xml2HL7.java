@@ -3,8 +3,7 @@ package org.rra.processors;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.nifi.annotation.behavior.InputRequirement;
 import org.apache.nifi.annotation.behavior.SideEffectFree;
-import org.apache.nifi.annotation.behavior.SystemResource;
-import org.apache.nifi.annotation.behavior.SystemResourceConsideration;
+import org.apache.nifi.annotation.behavior.SupportsBatching;
 import org.apache.nifi.annotation.documentation.CapabilityDescription;
 import org.apache.nifi.annotation.documentation.Tags;
 import org.apache.nifi.annotation.documentation.UseCase;
@@ -22,24 +21,23 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
-
+@Slf4j
+@SupportsBatching
 @InputRequirement(InputRequirement.Requirement.INPUT_REQUIRED)
 @SideEffectFree
-@SystemResourceConsideration(resource = SystemResource.CPU)
-@Slf4j
-@Tags({"HL7", "HL72Json", "CDP","json"})
-@CapabilityDescription("Transform a HL7 MLLP Message to JSON.")
-@UseCase(description = "Processing HL7 Messages",
+@Tags({"CDP", "HL7", "xml2hl7", "xml"})
+@CapabilityDescription("A XML Converter. Will convert a XML object in HL7 MLLP message during the NIFI Workflows")
+@UseCase(description = "Convert a XML Object in HL7",
         inputRequirement = InputRequirement.Requirement.INPUT_REQUIRED)
-public class HL72Json extends AbstractProcessor {
+
+public class Xml2HL7 extends AbstractProcessor {
     public static final Relationship REL_SUCCESS = new Relationship.Builder()
             .name("success")
-            .description("Transform success")
+            .description("Success relationship of the DICOM 2 XML process")
             .build();
-
     public static final Relationship REL_FAILURE = new Relationship.Builder()
             .name("failure")
-            .description("Failed to JSON transform.").build();
+            .description("DICOM 2 XML Failed").build();
 
 
     private Set<Relationship> relationships;
@@ -49,7 +47,6 @@ public class HL72Json extends AbstractProcessor {
         relationships = Set.of(REL_SUCCESS, REL_FAILURE);
         descriptors = new ArrayList<>();
     }
-
     @Override
     public Set<Relationship> getRelationships() {
         return this.relationships;
@@ -70,7 +67,7 @@ public class HL72Json extends AbstractProcessor {
             flowFile = session.write(flowFile, (in, out) -> {
                 try (OutputStream buffOut = new BufferedOutputStream(out)) {
                     try {
-                        HL7Transformer.transform2Json(in, buffOut);
+                        HL7Transformer.transformFromXml(in, buffOut);
                     } catch (Exception e) {
                         throw new IOException(e);
                     }
@@ -78,10 +75,10 @@ public class HL72Json extends AbstractProcessor {
                     throw new RuntimeException(e);
                 }
             });
-            String fileName = flowFile.getAttribute(CoreAttributes.UUID.key()) + ".json";
+            String fileName = flowFile.getAttribute(CoreAttributes.UUID.key()) + ".hl7";
             flowFile = session.putAttribute(flowFile, CoreAttributes.FILENAME.key(), fileName);
-            flowFile = session.putAttribute(flowFile, CoreAttributes.MIME_TYPE.key(), "application/json");
-            session.getProvenanceReporter().modifyContent(flowFile, "hl72json");
+            flowFile = session.putAttribute(flowFile, CoreAttributes.MIME_TYPE.key(), "text/plain");
+            session.getProvenanceReporter().modifyContent(flowFile, "xml2hl7");
             session.transfer(flowFile, REL_SUCCESS);
         } catch (Exception e) {
             log.error(e.getMessage());
