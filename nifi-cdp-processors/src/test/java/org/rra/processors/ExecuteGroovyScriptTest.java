@@ -168,7 +168,7 @@ public class ExecuteGroovyScriptTest {
             additionalClasspath.append(p);
             additionalClasspath.append(i == 0 ? ',' : ';'); // create additional classpath string separated by ; and ,
         }
-
+        System.out.println("additionalClasspath.toString() = " + additionalClasspath.toString());
         runner.setProperty(ExecuteGroovyScript.ADD_CLASSPATH, additionalClasspath.toString());
         runner.setProperty(ExecuteGroovyScript.SCRIPT_BODY, ";");
         runner.assertValid();
