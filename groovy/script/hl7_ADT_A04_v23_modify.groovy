@@ -18,7 +18,7 @@ context.getParserConfiguration().setValidating(false);
 Message hapiMsg = parser.parse(flowFile.read().getText('UTF-8'));
 
 //Only selected messages
-if (! hapiMsg instanceof ca.uhn.hl7v2.model.v23.message.ADT_A04){
+if (! hapiMsg.getClass().is(ca.uhn.hl7v2.model.v23.message.ADT_A04.class)){
     REL_FAILURE << flowFile
     return
 }
