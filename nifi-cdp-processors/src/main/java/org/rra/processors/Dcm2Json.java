@@ -34,9 +34,6 @@ public class Dcm2Json extends AbstractProcessor {
     public static final String INCLUDE_BULK_DATA = "Include Bulk Data";
     public static final String NO_BULK_DATA = "No Bulk Data";
     public static final String DEFAULT_BULK_URI = "Default";
-    private Boolean inclBulk;
-    private boolean indent;
-    private boolean printTagNames;
     public static final PropertyDescriptor BULK_DATA = new PropertyDescriptor
             .Builder()
             .name("bulk-data")
@@ -81,6 +78,18 @@ public class Dcm2Json extends AbstractProcessor {
             .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
             .build();
 
+
+    public static final PropertyDescriptor REMOVE_PRIVAT = new PropertyDescriptor
+            .Builder()
+            .name("remove-privat")
+            .displayName("Remove Privat Tags")
+            .description("Don't include private Tags into the JSON output.")
+            .allowableValues("true", "false")
+            .defaultValue("true")
+            .required(true)
+            .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
+            .build();
+
     public static final Relationship REL_SUCCESS = new Relationship.Builder()
             .name("success")
             .description("Success relationship of the DICOM 2 XML process")
@@ -100,6 +109,10 @@ public class Dcm2Json extends AbstractProcessor {
         if (flowFile == null) {
             return;
         }
+        Boolean inclBulk;
+        boolean indent;
+        boolean printTagNames;
+        boolean removePrivateAttributes;
         if (context.getProperty(BULK_DATA).isSet()) {
             String selectedType = context.getProperty(BULK_DATA).evaluateAttributeExpressions().getValue();
             if (selectedType.equalsIgnoreCase(INCLUDE_BULK_DATA)) {
@@ -115,13 +128,14 @@ public class Dcm2Json extends AbstractProcessor {
         }
         indent = context.getProperty(INDENT_JSON).evaluateAttributeExpressions().asBoolean();
         printTagNames = context.getProperty(PRINT_TAG_NAMES).evaluateAttributeExpressions().asBoolean();
+        removePrivateAttributes = context.getProperty(REMOVE_PRIVAT).evaluateAttributeExpressions().asBoolean();
         getLogger().info("inclBulk:{}, indent:{}, printTagNames:{}", inclBulk, indent, printTagNames);
 
         try {
             flowFile = session.write(flowFile, (in, out) -> {
                 try (OutputStream buffOut = new BufferedOutputStream(out)) {
                     try {
-                        Dicom2JsonTransformer.transform(in, buffOut, inclBulk, indent, printTagNames);
+                        Dicom2JsonTransformer.transform(in, buffOut, inclBulk, indent, printTagNames, removePrivateAttributes);
                     } catch (Exception e) {
                         throw new IOException(e);
                     }
@@ -142,7 +156,7 @@ public class Dcm2Json extends AbstractProcessor {
 
     @Override
     protected void init(final ProcessorInitializationContext context) {
-        descriptors = List.of(BULK_DATA, INDENT_JSON, ENCODE_AS_NUMBER, PRINT_TAG_NAMES);
+        descriptors = List.of(BULK_DATA, INDENT_JSON, ENCODE_AS_NUMBER, PRINT_TAG_NAMES, REMOVE_PRIVAT);
         relationships = Set.of(REL_SUCCESS, REL_FAILURE);
     }
 

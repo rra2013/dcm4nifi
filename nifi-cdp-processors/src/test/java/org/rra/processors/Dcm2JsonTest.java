@@ -60,6 +60,7 @@ public class Dcm2JsonTest {
 
         testRunner.setProperty(Dcm2Json.INDENT_JSON, "false");
         testRunner.setProperty(Dcm2Json.ENCODE_AS_NUMBER, "false");
+        testRunner.setProperty(Dcm2Json.REMOVE_PRIVAT, "true");
         testRunner.setProperty(Dcm2Json.BULK_DATA, Dcm2Json.NO_BULK_DATA);
         dcmObjects.forEach(dcmFileArray -> {
             testRunner.enqueue(dcmFileArray);
@@ -74,7 +75,7 @@ public class Dcm2JsonTest {
         byte[] bytes = dcmObjects.get(0);
         try(ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(bytes)) {
          try(BufferedInputStream bis = new BufferedInputStream(byteArrayInputStream)) {
-            Dicom2JsonTransformer.transform(bis,System.out, Boolean.FALSE, true, true);
+            Dicom2JsonTransformer.transform(bis,System.out, Boolean.FALSE, true, true, false);
          }
       }
     }

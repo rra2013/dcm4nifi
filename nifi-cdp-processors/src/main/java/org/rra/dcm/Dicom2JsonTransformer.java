@@ -3,9 +3,11 @@ package org.rra.dcm;
 import jakarta.json.Json;
 import jakarta.json.JsonValue;
 import jakarta.json.stream.JsonGenerator;
+import org.dcm4che3.data.Attributes;
 import org.dcm4che3.data.VR;
 import org.dcm4che3.io.BasicBulkDataDescriptor;
 import org.dcm4che3.io.DicomInputStream;
+import org.dcm4che3.io.DicomOutputStream;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -19,10 +21,10 @@ public class Dicom2JsonTransformer {
     private Dicom2JsonTransformer() {
     }
 
-    public static void transform(InputStream in, OutputStream out, Boolean includeBulkData, boolean indent, boolean tagNames) throws IOException {
+    public static void transform(InputStream in, OutputStream out, Boolean includeBulkData, boolean indent, boolean tagNames, boolean removePrivateAttributes) throws IOException {
         DicomInputStream dis = new DicomInputStream(in);
         try {
-            parse(dis, out, includeBulkData, indent, tagNames);
+            parse(dis, out, includeBulkData, indent, tagNames, removePrivateAttributes);
         } catch (Exception exception) {
             throw exception;
         } finally {
@@ -30,7 +32,7 @@ public class Dicom2JsonTransformer {
         }
     }
 
-    private static void parse(DicomInputStream dis, OutputStream out, Boolean includeBulkData, boolean indent, boolean tagNames) throws IOException {
+    private static void parse(DicomInputStream dis, OutputStream out, Boolean includeBulkData, boolean indent, boolean tagNames, boolean removePrivateAttributes) throws IOException {
         BasicBulkDataDescriptor bulkDataDescriptor = new BasicBulkDataDescriptor();
         bulkDataDescriptor.excludeDefaults(false);
         if (null == includeBulkData) {
@@ -47,7 +49,7 @@ public class Dicom2JsonTransformer {
         dis.setConcatenateBulkDataFiles(false);
         JsonGenerator jsonGen = createGenerator(out, indent);
 
-        JSONTagNameWriter jsonWriter = new JSONTagNameWriter(jsonGen, tagNames);
+        JSONTagNameWriter jsonWriter = new JSONTagNameWriter(jsonGen, tagNames,  removePrivateAttributes);
         if (ENCODE_AS_NUMBER) {
             jsonWriter.setJsonType(VR.DS, JsonValue.ValueType.NUMBER);
             jsonWriter.setJsonType(VR.IS, JsonValue.ValueType.NUMBER);

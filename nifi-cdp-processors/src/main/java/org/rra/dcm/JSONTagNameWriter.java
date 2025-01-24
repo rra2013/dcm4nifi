@@ -26,13 +26,15 @@ public class JSONTagNameWriter implements DicomInputHandler {
     private final Deque<Boolean> hasItems = new ArrayDeque<>();
     private final boolean printTagNames;
     private final ElementDictionary dict = ElementDictionary.getStandardElementDictionary();
+    private final boolean removePrivateAttributes;
     private String replaceBulkDataURI;
     private final EnumMap<VR, JsonValue.ValueType> jsonTypeByVR = new EnumMap<>(VR.class);
 
 
-    public JSONTagNameWriter(JsonGenerator gen, boolean printTagNames) {
+    public JSONTagNameWriter(JsonGenerator gen, boolean printTagNames, boolean removePrivateAttributes) {
         this.gen = gen;
         this.printTagNames = printTagNames;
+        this.removePrivateAttributes = removePrivateAttributes;
     }
 
     private static VR requireIS_DS_SV_UV(VR vr) {
@@ -152,6 +154,10 @@ public class JSONTagNameWriter implements DicomInputHandler {
         int tag = dis.tag();
         VR vr = dis.vr();
         long len = dis.unsignedLength();
+        if (TagUtils.isPrivateTag(tag) && removePrivateAttributes) {
+            dis.readValue(dis, attrs);
+            return;
+        }
         if (TagUtils.isGroupLength(tag)) {
             dis.readValue(dis, attrs);
         } else if (dis.isExcludeBulkData()) {
