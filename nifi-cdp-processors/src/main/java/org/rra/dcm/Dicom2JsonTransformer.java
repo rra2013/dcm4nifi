@@ -6,7 +6,6 @@ import jakarta.json.stream.JsonGenerator;
 import org.dcm4che3.data.VR;
 import org.dcm4che3.io.BasicBulkDataDescriptor;
 import org.dcm4che3.io.DicomInputStream;
-import org.dcm4che3.json.JSONWriter;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -17,18 +16,21 @@ import java.util.Map;
 public class Dicom2JsonTransformer {
     private static final Boolean ENCODE_AS_NUMBER = Boolean.FALSE;
 
-    public static void transform(InputStream in, OutputStream out, Boolean includeBulkData, boolean indent) throws IOException {
+    private Dicom2JsonTransformer() {
+    }
+
+    public static void transform(InputStream in, OutputStream out, Boolean includeBulkData, boolean indent, boolean tagNames) throws IOException {
         DicomInputStream dis = new DicomInputStream(in);
-        try{
-            parse(dis, out, includeBulkData, indent);
-        }catch (Exception exception){
+        try {
+            parse(dis, out, includeBulkData, indent, tagNames);
+        } catch (Exception exception) {
             throw exception;
-        }finally {
+        } finally {
             dis.close();
         }
     }
 
-    private static void parse(DicomInputStream dis, OutputStream out, Boolean includeBulkData, boolean indent) throws IOException {
+    private static void parse(DicomInputStream dis, OutputStream out, Boolean includeBulkData, boolean indent, boolean tagNames) throws IOException {
         BasicBulkDataDescriptor bulkDataDescriptor = new BasicBulkDataDescriptor();
         bulkDataDescriptor.excludeDefaults(false);
         if (null == includeBulkData) {
@@ -44,7 +46,8 @@ public class Dicom2JsonTransformer {
         dis.setBulkDataFileSuffix(null);
         dis.setConcatenateBulkDataFiles(false);
         JsonGenerator jsonGen = createGenerator(out, indent);
-        JSONWriter jsonWriter = new JSONWriter(jsonGen);
+
+        JSONTagNameWriter jsonWriter = new JSONTagNameWriter(jsonGen, tagNames);
         if (ENCODE_AS_NUMBER) {
             jsonWriter.setJsonType(VR.DS, JsonValue.ValueType.NUMBER);
             jsonWriter.setJsonType(VR.IS, JsonValue.ValueType.NUMBER);
@@ -52,6 +55,7 @@ public class Dicom2JsonTransformer {
             jsonWriter.setJsonType(VR.UV, JsonValue.ValueType.NUMBER);
         }
         dis.setDicomInputHandler(jsonWriter);
+
         dis.readDataset();
         jsonGen.flush();
     }

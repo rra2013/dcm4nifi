@@ -23,6 +23,7 @@ import org.rra.hl7.NifiHL7HapiServer;
 import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
@@ -37,6 +38,8 @@ public class HL7ServerTest {
 
     @Test
     public void testProcessor() throws HL7Exception, LLPException, IOException {
+        final int port = Utils.provideRandomPort();
+        testRunner.setProperty(HL7Server.PORT, Integer.toString(port));
         testRunner.run(1, false, true);
         log.info("$ $ $ $ Run $ $ $ $ $");
         String msg = "MSH|^~\\&|HIS|RIH|EKG|EKG|199904140038||ADT^A01|12345|P|2.2\r"
@@ -51,7 +54,7 @@ public class HL7ServerTest {
         final Parser p = context.getPipeParser();
         Message adt = p.parse(msg);
         boolean useTls = false;
-        Connection connection = context.newClient("localhost", 5000, useTls);
+        Connection connection = context.newClient("localhost", port, useTls);
         // The initiator is used to transmit unsolicited messages
         Initiator initiator = connection.getInitiator();
         Message response = initiator.sendAndReceive(adt);
@@ -108,4 +111,5 @@ public class HL7ServerTest {
         System.out.println(parse.toString().replaceAll("\\r", "\r\n"));
 
     }
+
 }

@@ -41,6 +41,8 @@ public class StoreScpTest {
 
     @Test
     public void testProcessor() {
+        final int port = Utils.provideRandomPort();
+        testRunner.setProperty(StoreScp.PORT, "" + port);
         testRunner.enqueue("TEST");
         testRunner.run(1, false, true);
         log.info("$ $ $ $ Run $ $ $ $ $");
@@ -48,7 +50,7 @@ public class StoreScpTest {
             dcmObjects.forEach(bytes -> {
                 try (ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(bytes)) {
                     try (BufferedInputStream bis = new BufferedInputStream(byteArrayInputStream)) {
-                        new NifiStoreSCU("localhost", 11113, "NIFI_SCU", "DCM4NIFI", bis);
+                        new NifiStoreSCU("localhost", port, "NIFI_SCU", "DCM4NIFI", bis);
                     }
                 } catch (Exception e) {
 

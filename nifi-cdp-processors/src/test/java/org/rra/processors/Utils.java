@@ -10,10 +10,8 @@ import org.dcm4che3.io.DicomOutputStream;
 import org.junit.jupiter.api.Assertions;
 import org.rra.dcm.DicomDataReader;
 
-import java.io.BufferedInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
+import java.io.*;
+import java.net.ServerSocket;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -79,5 +77,16 @@ public class Utils {
     @FunctionalInterface
     public interface FileInfo{
         String getTransferSyntax();
+    }
+    public static int provideRandomPort() {
+        ServerSocket server;
+        try {
+            server = new ServerSocket(0);
+            int port = server.getLocalPort();
+            server.close();
+            return port;
+        } catch (IOException e) {
+            throw new Error(e);
+        }
     }
 }

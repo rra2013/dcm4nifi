@@ -7,6 +7,7 @@ import org.apache.nifi.annotation.behavior.SupportsBatching;
 import org.apache.nifi.annotation.documentation.CapabilityDescription;
 import org.apache.nifi.annotation.documentation.Tags;
 import org.apache.nifi.annotation.documentation.UseCase;
+import org.apache.nifi.annotation.lifecycle.OnScheduled;
 import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.flowfile.attributes.CoreAttributes;
@@ -21,7 +22,7 @@ import java.io.OutputStream;
 import java.util.List;
 import java.util.Set;
 
-@Slf4j
+
 @SupportsBatching
 @InputRequirement(InputRequirement.Requirement.INPUT_REQUIRED)
 @SideEffectFree
@@ -33,7 +34,9 @@ public class Dcm2Json extends AbstractProcessor {
     public static final String INCLUDE_BULK_DATA = "Include Bulk Data";
     public static final String NO_BULK_DATA = "No Bulk Data";
     public static final String DEFAULT_BULK_URI = "Default";
-
+    private Boolean inclBulk;
+    private boolean indent;
+    private boolean printTagNames;
     public static final PropertyDescriptor BULK_DATA = new PropertyDescriptor
             .Builder()
             .name("bulk-data")
@@ -52,6 +55,7 @@ public class Dcm2Json extends AbstractProcessor {
             .description("Use additional whitespace in JSON output.")
             .allowableValues("true", "false")
             .defaultValue("true")
+            .required(true)
             .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
             .build();
 
@@ -66,6 +70,16 @@ public class Dcm2Json extends AbstractProcessor {
             .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
             .build();
 
+    public static final PropertyDescriptor PRINT_TAG_NAMES = new PropertyDescriptor
+            .Builder()
+            .name("print-tag-names")
+            .displayName("Print Tag Names")
+            .description("Use Tag Names in JSON output.")
+            .allowableValues("true", "false")
+            .defaultValue("true")
+            .required(true)
+            .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
+            .build();
 
     public static final Relationship REL_SUCCESS = new Relationship.Builder()
             .name("success")
@@ -86,8 +100,6 @@ public class Dcm2Json extends AbstractProcessor {
         if (flowFile == null) {
             return;
         }
-        final Boolean inclBulk;
-        final boolean indent;
         if (context.getProperty(BULK_DATA).isSet()) {
             String selectedType = context.getProperty(BULK_DATA).evaluateAttributeExpressions().getValue();
             if (selectedType.equalsIgnoreCase(INCLUDE_BULK_DATA)) {
@@ -98,15 +110,18 @@ public class Dcm2Json extends AbstractProcessor {
                 inclBulk = null;
             }
             //
-            indent = context.getProperty(INDENT_JSON).evaluateAttributeExpressions(flowFile).asBoolean();
         } else {
-            return;
+            inclBulk = null;
         }
+        indent = context.getProperty(INDENT_JSON).evaluateAttributeExpressions().asBoolean();
+        printTagNames = context.getProperty(PRINT_TAG_NAMES).evaluateAttributeExpressions().asBoolean();
+        getLogger().info("inclBulk:{}, indent:{}, printTagNames:{}", inclBulk, indent, printTagNames);
+
         try {
             flowFile = session.write(flowFile, (in, out) -> {
                 try (OutputStream buffOut = new BufferedOutputStream(out)) {
                     try {
-                        Dicom2JsonTransformer.transform(in, buffOut, inclBulk, indent);
+                        Dicom2JsonTransformer.transform(in, buffOut, inclBulk, indent, printTagNames);
                     } catch (Exception e) {
                         throw new IOException(e);
                     }
@@ -120,14 +135,14 @@ public class Dcm2Json extends AbstractProcessor {
             session.getProvenanceReporter().modifyContent(flowFile, "dcm2json");
             session.transfer(flowFile, REL_SUCCESS);
         } catch (Exception e) {
-            log.error(e.getMessage());
+            getLogger().error(e.getMessage());
             session.transfer(flowFile, REL_FAILURE);
         }
     }
 
     @Override
     protected void init(final ProcessorInitializationContext context) {
-        descriptors = List.of(BULK_DATA, INDENT_JSON, ENCODE_AS_NUMBER);
+        descriptors = List.of(BULK_DATA, INDENT_JSON, ENCODE_AS_NUMBER, PRINT_TAG_NAMES);
         relationships = Set.of(REL_SUCCESS, REL_FAILURE);
     }
 
@@ -141,4 +156,9 @@ public class Dcm2Json extends AbstractProcessor {
         return descriptors;
     }
 
+
+    @OnScheduled
+    protected void start(final ProcessContext context) {
+        getLogger().info("+ + + Start {} OK. + + +", getClass().getSimpleName());
+    }
 }
