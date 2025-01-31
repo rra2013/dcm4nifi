@@ -107,7 +107,7 @@ public class HL7Send extends AbstractProcessor {
                     String hl7 = IOUtils.toString(bis, StandardCharsets.UTF_8);
                     String response = HL7Sender.send(remoteHost, port, hl7);
                     try (OutputStream buffOut = new BufferedOutputStream(out)) {
-                        IOUtils.write(response, buffOut);
+                        IOUtils.write(response, buffOut, StandardCharsets.UTF_8);
                     }
                 } catch (HL7Exception e) {
                     throw new ProcessException(e);

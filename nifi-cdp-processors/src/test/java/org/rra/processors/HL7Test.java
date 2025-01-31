@@ -232,7 +232,7 @@ public class HL7Test {
             try(ByteArrayOutputStream baos = new ByteArrayOutputStream()){
                 HL7Transformer.transformFromXml(fis, baos);
                 byte[] byteArray = baos.toByteArray();
-                String hl7 = IOUtils.toString(byteArray);
+                String hl7 = IOUtils.toString(byteArray, StandardCharsets.UTF_8.name());
                 System.out.println(hl7.replaceAll("\\r", "\r\n"));
             }
 

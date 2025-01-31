@@ -53,7 +53,7 @@ public class Utils {
         File dir = new File(path);
         Collection<File> files = FileUtils.listFiles(dir, null, true);
         files.forEach(file -> {
-            //log.debug("DICOM FIle: {}", file.getAbsolutePath());
+            log.debug("DICOM FIle: {}", file.getAbsolutePath());
             StringBuffer ts = new StringBuffer();
             dcmObjects.add(readDicomFile(file, ts));
             log.info("Transfersyntax: {}", ts.toString());

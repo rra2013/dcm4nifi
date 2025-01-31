@@ -50,7 +50,7 @@ public class HL7Transformer {
             String msg_xml = IOUtils.toString(bis, StandardCharsets.UTF_8);
             Message message = XML_PARSER.parse(msg_xml);
             String pipe_msg = PIPE_PARSER.encode(message);
-            IOUtils.write(pipe_msg, buffOut);
+            IOUtils.write(pipe_msg, buffOut, StandardCharsets.UTF_8);
         }
     }
 

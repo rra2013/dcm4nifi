@@ -113,6 +113,7 @@ public class Dcm2Json extends AbstractProcessor {
         boolean indent;
         boolean printTagNames;
         boolean removePrivateAttributes;
+        boolean encodeAsNumber;
         if (context.getProperty(BULK_DATA).isSet()) {
             String selectedType = context.getProperty(BULK_DATA).evaluateAttributeExpressions().getValue();
             if (selectedType.equalsIgnoreCase(INCLUDE_BULK_DATA)) {
@@ -129,13 +130,14 @@ public class Dcm2Json extends AbstractProcessor {
         indent = context.getProperty(INDENT_JSON).evaluateAttributeExpressions().asBoolean();
         printTagNames = context.getProperty(PRINT_TAG_NAMES).evaluateAttributeExpressions().asBoolean();
         removePrivateAttributes = context.getProperty(REMOVE_PRIVAT).evaluateAttributeExpressions().asBoolean();
+        encodeAsNumber = context.getProperty(ENCODE_AS_NUMBER).evaluateAttributeExpressions().asBoolean();
         getLogger().info("inclBulk:{}, indent:{}, printTagNames:{}", inclBulk, indent, printTagNames);
 
         try {
             flowFile = session.write(flowFile, (in, out) -> {
                 try (OutputStream buffOut = new BufferedOutputStream(out)) {
                     try {
-                        Dicom2JsonTransformer.transform(in, buffOut, inclBulk, indent, printTagNames, removePrivateAttributes);
+                        Dicom2JsonTransformer.transform(in, buffOut, inclBulk, indent, printTagNames, removePrivateAttributes, encodeAsNumber);
                     } catch (Exception e) {
                         throw new IOException(e);
                     }

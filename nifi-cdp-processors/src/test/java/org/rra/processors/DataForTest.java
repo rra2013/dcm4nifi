@@ -17,6 +17,8 @@ public class DataForTest {
     public static final String DICOM_PATH_SR = "/mnt/f/DICOM/SR/";
     public static final String DICOM_PATH_DEF = "/mnt/f/DICOM/CT/ct_IVRLE/";
     public static final String DICOM_PATH_PDF = "/mnt/f/DICOM/pdf/";
+    public static final String DICOM_PATH_US = "/mnt/f/DICOM/US/40A6C056/0755AF95";
+    public static final String DICOM_PATH_MR = "/mnt/f/DICOM/MR/";
     public static final String DICOM_SERVER_HOST = "localhost";
     public static final String DICOM_SERVER_AET = "DCM4CHEE";
     public static final String DICOM_SERVER_MOVE_AET = "DCM4NIFI";

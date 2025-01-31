@@ -24,9 +24,13 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.rra.processors.Utils.readDicomFiles;
+
 @Slf4j
 public class Dcm2JsonTest {
     private static List<byte[]> dcmObjects = new ArrayList<>();
+    private static List<byte[]> dcmObjectsUS = new ArrayList<>();
+    private static List<byte[]> dcmObjectsMR = new ArrayList<>();
     private TestRunner testRunner;
 
     @BeforeAll
@@ -34,6 +38,10 @@ public class Dcm2JsonTest {
         //Get DICOM Files
         dcmObjects = DataForTest.DCMOBJECTS;
         Assertions.assertTrue(dcmObjects.size() > 0);
+        readDicomFiles(dcmObjectsUS, DataForTest.DICOM_PATH_US);
+        Assertions.assertTrue(dcmObjectsUS.size() > 0);
+        readDicomFiles(dcmObjectsMR, DataForTest.DICOM_PATH_MR);
+        Assertions.assertTrue(dcmObjectsMR.size() > 0);
     }
 
     @BeforeEach
@@ -45,24 +53,27 @@ public class Dcm2JsonTest {
     public void testProcessorSuccess() {
         log.info("$ $ $ $ Run DCM2JSON $ $ $ $ $");
         testRunner.setValidateExpressionUsage(false);
-        testRunner.setProperty(Dcm2Json.BULK_DATA, Dcm2Json.INCLUDE_BULK_DATA);
+        testRunner.setProperty(Dcm2Json.BULK_DATA, Dcm2Json.NO_BULK_DATA);
         testRunner.setProperty(Dcm2Json.INDENT_JSON, "true");
-        testRunner.setProperty(Dcm2Json.ENCODE_AS_NUMBER, "true");
+        testRunner.setProperty(Dcm2Json.ENCODE_AS_NUMBER, "false");
+        testRunner.setProperty(Dcm2Json.REMOVE_PRIVAT, "true");
         testRunner.setProperty(Dcm2Json.PRINT_TAG_NAMES, "true");
-
-        dcmObjects.forEach(dcmFileArray -> {
+        //First test US
+        dcmObjectsUS.forEach(dcmFileArray -> {
             testRunner.enqueue(dcmFileArray);
             testRunner.run();
             log.info("Run with size {}", dcmFileArray.length);
         });
         List<MockFlowFile> success = testRunner.getFlowFilesForRelationship(Dcm2Json.REL_SUCCESS);
         log.info("Size of success: {}", success.size());
+        List<MockFlowFile> failed = testRunner.getFlowFilesForRelationship(Dcm2Json.REL_FAILURE);
+        log.info("Size of failed: {}", failed.size());
 
-        testRunner.setProperty(Dcm2Json.INDENT_JSON, "false");
+        testRunner.setProperty(Dcm2Json.INDENT_JSON, "true");
         testRunner.setProperty(Dcm2Json.ENCODE_AS_NUMBER, "false");
-        testRunner.setProperty(Dcm2Json.REMOVE_PRIVAT, "true");
+        testRunner.setProperty(Dcm2Json.REMOVE_PRIVAT, "false");
         testRunner.setProperty(Dcm2Json.BULK_DATA, Dcm2Json.NO_BULK_DATA);
-        dcmObjects.forEach(dcmFileArray -> {
+        dcmObjectsMR.forEach(dcmFileArray -> {
             testRunner.enqueue(dcmFileArray);
             testRunner.run();
             log.info("Run with size {}", dcmFileArray.length);
@@ -72,11 +83,15 @@ public class Dcm2JsonTest {
     }
     @Test
     public void testJsonOutput() throws IOException {
-        byte[] bytes = dcmObjects.get(0);
-        try(ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(bytes)) {
-         try(BufferedInputStream bis = new BufferedInputStream(byteArrayInputStream)) {
-            Dicom2JsonTransformer.transform(bis,System.out, Boolean.FALSE, true, true, false);
-         }
-      }
+
+        dcmObjectsUS.forEach(bytes -> {
+            try(ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(bytes)) {
+                try(BufferedInputStream bis = new BufferedInputStream(byteArrayInputStream)) {
+                    Dicom2JsonTransformer.transform(bis,System.out, Boolean.FALSE, true, true, true, false);
+                }
+            } catch (IOException e) {
+                e.printStackTrace(System.err);
+            }
+        });
     }
 }
