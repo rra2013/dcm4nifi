@@ -25,7 +25,7 @@ public class JSONTagNameWriter implements DicomInputHandler {
     private final JsonGenerator gen;
     private final Deque<Boolean> hasItems = new ArrayDeque<>();
     private final boolean printTagNames;
-    private final ElementDictionary dict = ElementDictionary.getStandardElementDictionary();
+    private static final ElementDictionary DICT = ElementDictionary.getStandardElementDictionary();
     private String replaceBulkDataURI;
     private final EnumMap<VR, JsonValue.ValueType> jsonTypeByVR = new EnumMap<>(VR.class);
 
@@ -96,7 +96,7 @@ public class JSONTagNameWriter implements DicomInputHandler {
             return;
 
         if (this.printTagNames) {
-            String tagName = dict.keywordOf(tag);
+            String tagName = DICT.keywordOf(tag);
             if (null == tagName || tagName.equals("")) {
                 gen.writeStartObject(TagUtils.toHexString(tag));
             } else {
@@ -158,7 +158,7 @@ public class JSONTagNameWriter implements DicomInputHandler {
             dis.readValue(dis, attrs);
         } else {
             if (this.printTagNames) {
-                String tagName = dict.keywordOf(tag);
+                String tagName = DICT.keywordOf(tag);
                 if (null == tagName || tagName.equals("")) {
                     gen.writeStartObject(TagUtils.toHexString(tag));
                 } else {
