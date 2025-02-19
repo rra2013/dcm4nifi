@@ -34,7 +34,12 @@ public class Deidentify {
         deidentifier.setDummyValue(tag, vr, value);
     }*/
 
-
+    public Attributes deidentifyAttributes(Attributes dataset, boolean remapStSerUIDs, String prefix, String postfix) {
+        dataset = deidentifyAttributes(dataset, remapStSerUIDs);
+        dataset.setString(Tag.PatientID, VR.LO, prefix+"-"+postfix);
+        dataset.setString(Tag.PatientName, VR.PN, prefix+"^"+postfix);
+        return dataset;
+    }
     public Attributes deidentifyAttributes(Attributes dataset, boolean remapStSerUIDs) {
         //Remap Study IUID, Series IUID, SOP IUID and Frame Of Reference UID
         final String studyIUID = dataset.getString(Tag.StudyInstanceUID, null);
@@ -58,8 +63,9 @@ public class Deidentify {
 
         }
         //------------------------------------------------------------------------------------------
-        dataset.setString(Tag.IssuerOfPatientID, VR.LO,"IDSC-ANONYMIZER");
+        dataset.setString(Tag.IssuerOfPatientID, VR.LO,"DCM4NIFI");
         //------------------------------------------------------------------------------------------
+
         return dataset;
     }
 

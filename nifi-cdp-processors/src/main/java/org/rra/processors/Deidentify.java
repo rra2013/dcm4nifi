@@ -7,6 +7,7 @@ import org.apache.nifi.annotation.documentation.Tags;
 import org.apache.nifi.annotation.documentation.UseCase;
 import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.flowfile.FlowFile;
+import org.apache.nifi.logging.ComponentLog;
 import org.apache.nifi.processor.*;
 import org.apache.nifi.processor.util.StandardValidators;
 import org.dcm4che3.data.Attributes;
@@ -19,14 +20,14 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
-@Slf4j
+
 @SupportsBatching
 @InputRequirement(InputRequirement.Requirement.INPUT_REQUIRED)
 @SideEffectFree
 @SystemResourceConsideration(resource = SystemResource.CPU)
 @Tags({"CDP","DICOM", "deidentify"})
 @CapabilityDescription("A DICOM De-Identifier. Will deidentify DICOM Objects during the NIFI Workflows")
-@UseCase(description = "De-Identifier can be used for anonymizing DICOM Meta Data of DICOM 3 Objects",
+@UseCase(description = "The De-Identifier can be used for anonymizing DICOM Meta Data of DICOM 3 Objects",
         inputRequirement = InputRequirement.Requirement.INPUT_REQUIRED)
 public class Deidentify extends AbstractProcessor {
 
@@ -41,16 +42,6 @@ public class Deidentify extends AbstractProcessor {
             .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
             .build();
 
-   /* public static final PropertyDescriptor BOOLEAN = new PropertyDescriptor.Builder()
-            .name("Pretty Print")
-            .displayName("Pretty Print")
-            .description("Apply pretty print formatting to the output.")
-            .required(true)
-            .allowableValues("true", "false")
-            .defaultValue("false")
-            .dependsOn(DEIDENT_MODEL)
-            .build();
-*/
     public static final Relationship REL_SUCCESS = new Relationship.Builder()
             .name("success")
             .description("Success relationship of the de-identification process")
@@ -65,7 +56,7 @@ public class Deidentify extends AbstractProcessor {
 
     @Override
     protected void init(final ProcessorInitializationContext context) {
-        descriptors = List.of(DEIDENT_MODEL/*, BOOLEAN*/);
+        descriptors = List.of(DEIDENT_MODEL);
         relationships = Set.of(REL_SUCCESS, REL_FAILURE);
     }
 
@@ -86,6 +77,7 @@ public class Deidentify extends AbstractProcessor {
             return;
         }
         DeidentifyModel deidentifyModel = DeidentifyModel.getModel();
+        ComponentLog log = getLogger();
         if (null == deidentifyModel) {
             log.error("The Deidentify Model is null");
             return;
