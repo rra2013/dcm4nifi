@@ -1,6 +1,5 @@
 package org.rra.processors;
 
-import lombok.extern.slf4j.Slf4j;
 import org.apache.nifi.annotation.behavior.*;
 import org.apache.nifi.annotation.documentation.CapabilityDescription;
 import org.apache.nifi.annotation.documentation.Tags;
@@ -13,9 +12,9 @@ import org.apache.nifi.processor.util.StandardValidators;
 import org.dcm4che3.data.Attributes;
 import org.dcm4che3.data.Tag;
 import org.rra.deidentify.GeneralAnonymizer;
-import org.rra.deidentify.model.DeidentifyModel;
 
 import java.io.*;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
@@ -32,7 +31,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public class Deidentify extends AbstractProcessor {
 
 
-    public static final PropertyDescriptor DEIDENT_MODEL = new PropertyDescriptor
+   /* public static final PropertyDescriptor DEIDENT_MODEL = new PropertyDescriptor
             .Builder()
             .name("Model")
             .displayName("Model")
@@ -40,7 +39,7 @@ public class Deidentify extends AbstractProcessor {
             .required(true)
             .defaultValue("deidentify.json")
             .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
-            .build();
+            .build();*/
 
     public static final Relationship REL_SUCCESS = new Relationship.Builder()
             .name("success")
@@ -56,7 +55,7 @@ public class Deidentify extends AbstractProcessor {
 
     @Override
     protected void init(final ProcessorInitializationContext context) {
-        descriptors = List.of(DEIDENT_MODEL);
+        descriptors = new ArrayList<>();//List.of(DEIDENT_MODEL);
         relationships = Set.of(REL_SUCCESS, REL_FAILURE);
     }
 
@@ -76,19 +75,14 @@ public class Deidentify extends AbstractProcessor {
         if (flowFile == null) {
             return;
         }
-        DeidentifyModel deidentifyModel = DeidentifyModel.getModel();
         ComponentLog log = getLogger();
-        if (null == deidentifyModel) {
-            log.error("The Deidentify Model is null");
-            return;
-        }
         log.info("+ + + On Data from AET: {} + + +", flowFile.getAttribute("CallingAET"));
         try {
             AtomicReference<String> anonymSOPIUID = new AtomicReference("NO_UID");
             flowFile = session.write(flowFile, (in, out) -> {
                 try (OutputStream buffOut = new BufferedOutputStream(out)) {
                     try (InputStream buffIn = new BufferedInputStream(in)) {
-                        Attributes dcm = GeneralAnonymizer.anonymize(buffIn, buffOut, deidentifyModel);
+                        Attributes dcm = GeneralAnonymizer.anonymize(buffIn, buffOut);
                         String sopIUID = dcm.getString(Tag.SOPInstanceUID);
                         anonymSOPIUID.set(sopIUID);
                         log.debug(" + + + StudyInstanceUID: {}", dcm.getString(Tag.StudyInstanceUID));

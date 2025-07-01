@@ -13,7 +13,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.rra.dcm.DicomDataReader;
 import org.rra.dcm.DicomUtils;
-import org.rra.deidentify.model.DeidentifyModel;
 
 import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
@@ -39,18 +38,6 @@ public class DeidentifyTest {
     public void init() {
         testRunner = TestRunners.newTestRunner(Deidentify.class);
     }
-
-    @Test
-    public void testModel() {
-        DeidentifyModel model = null;
-        try {
-            model = DeidentifyModel.getModel();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-        Assertions.assertNotNull(model);
-    }
-
 
     @Test
     public void testProcessor() {

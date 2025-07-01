@@ -6,7 +6,6 @@ import org.dcm4che3.data.Tag;
 import org.dcm4che3.io.DicomEncodingOptions;
 import org.dcm4che3.io.DicomOutputStream;
 import org.rra.dcm.DicomDataReader;
-import org.rra.deidentify.model.DeidentifyModel;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -23,9 +22,9 @@ public class GeneralAnonymizer {
     private static final boolean retainPixelData = true;
     private static final DicomEncodingOptions encOpts = DicomEncodingOptions.DEFAULT;
 
-    public static Attributes anonymize(InputStream inputStream, OutputStream outputStream, DeidentifyModel deidentModel) throws IOException {
+    public static Attributes anonymize(InputStream inputStream, OutputStream outputStream) throws IOException {
         final DicomDataReader data = new DicomDataReader(inputStream, retainPixelData);
-        final Deidentify deidentify = new Deidentify(deidentModel);
+        final Deidentify deidentify = new Deidentify();
         final Attributes anonym = deidentify.deidentifyAttributes(data.getAttributes(), true);
         Attributes fmi = data.getFmi();
         if (null != fmi) {
@@ -39,7 +38,7 @@ public class GeneralAnonymizer {
         return anonym;
     }
 
-    public static Attributes pseudonymize(InputStream inputStream, OutputStream outputStream, DeidentifyModel deidentModel, PIDLookup lookup) throws Exception {
+    public static Attributes pseudonymize(InputStream inputStream, OutputStream outputStream, PIDLookup lookup) throws Exception {
         final DicomDataReader data = new DicomDataReader(inputStream, retainPixelData);
         final Attributes attributes = data.getAttributes();
         if (null == lookup) {
@@ -50,7 +49,7 @@ public class GeneralAnonymizer {
             throw new Exception("PID is not found");
         }
         final PseudonymLookupData lookupData = lookup.lookup(pid);
-        final Deidentify deidentify = new Deidentify(deidentModel);
+        final Deidentify deidentify = new Deidentify();
         final Attributes anonym = deidentify.deidentifyAttributes(attributes, true, lookupData.getPrefix(), lookupData.getPostfix());
         Attributes fmi = data.getFmi();
         if (null != fmi) {

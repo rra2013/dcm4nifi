@@ -1,7 +1,5 @@
 package org.rra.processors;
 
-import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.io.IOUtils;
 import org.apache.nifi.annotation.behavior.*;
 import org.apache.nifi.annotation.documentation.CapabilityDescription;
 import org.apache.nifi.annotation.documentation.Tags;
@@ -20,12 +18,9 @@ import org.dcm4che3.data.Attributes;
 import org.dcm4che3.data.Tag;
 import org.rra.deidentify.GeneralAnonymizer;
 import org.rra.deidentify.PseudonymLookupData;
-import org.rra.deidentify.model.DeidentifyModel;
 
 import java.io.*;
-import java.nio.charset.StandardCharsets;
 import java.sql.*;
-import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
@@ -115,11 +110,6 @@ public class Pseudonymizer extends AbstractProcessor {
             session.transfer(flowFile, REL_FAILURE);
             return;
         }
-        DeidentifyModel deidentifyModel = DeidentifyModel.getModel();
-        if (null == deidentifyModel) {
-            log.error("The Deidentify Model is null");
-            return;
-        }
         log.info("+ + + On Data from AET: {} + + +", flowFile.getAttribute("CallingAET"));
         try (final Connection con = dbcpService.getConnection()) {
             try {
@@ -127,7 +117,7 @@ public class Pseudonymizer extends AbstractProcessor {
                 flowFile = session.write(flowFile, (in, out) -> {
                     try (OutputStream buffOut = new BufferedOutputStream(out)) {
                         try (InputStream buffIn = new BufferedInputStream(in)) {
-                            Attributes dcm = GeneralAnonymizer.pseudonymize(buffIn, buffOut, deidentifyModel, pid -> {
+                            Attributes dcm = GeneralAnonymizer.pseudonymize(buffIn, buffOut, pid -> {
                                 log.info("Got pid:{}", pid);
                                 PseudonymLookupData lookup = lookupDB(con, selectQuery, pid);
                                 log.info("Result Set query pid:{}, prefix:{}, postfix:{}", lookup.getPid(), lookup.getPrefix(), lookup.getPostfix());

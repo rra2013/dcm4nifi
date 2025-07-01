@@ -4,29 +4,28 @@ import org.dcm4che3.data.Attributes;
 import org.dcm4che3.data.Tag;
 import org.dcm4che3.data.VR;
 import org.dcm4che3.io.DicomEncodingOptions;
-import org.rra.deidentify.model.DeidentifyModel;
 
 import java.util.EnumSet;
 
 public class Deidentify {
 
-    private final DeIdentifier deidentifier;
+    private final DcmDeIdentifier deidentifier;
     private final DicomEncodingOptions encOpts = DicomEncodingOptions.DEFAULT;
 
-    public Deidentify(DeidentifyModel deidentModel) {
-        EnumSet<DeIdentifier.Option> options = EnumSet.noneOf(DeIdentifier.Option.class);
-        if (deidentModel.isRetain_date())
-            options.add(DeIdentifier.Option.RetainLongitudinalTemporalInformationFullDatesOption);
+    public Deidentify() {
+        EnumSet<DcmDeIdentifier.Option> options = EnumSet.noneOf(DcmDeIdentifier.Option.class);
+        /*if (deidentModel.isRetain_date())
+            options.add(DeIdentifier_dep.Option.RetainLongitudinalTemporalInformationFullDatesOption);
         if (deidentModel.isRetain_dev())
-            options.add(DeIdentifier.Option.RetainDeviceIdentityOption);
+            options.add(DeIdentifier_dep.Option.RetainDeviceIdentityOption);
         if (deidentModel.isRetain_org())
-            options.add(DeIdentifier.Option.RetainInstitutionIdentityOption);
+            options.add(DeIdentifier_dep.Option.RetainInstitutionIdentityOption);
         if (deidentModel.isRetain_uid())
-            options.add(DeIdentifier.Option.RetainUIDsOption);
+            options.add(DeIdentifier_dep.Option.RetainUIDsOption);
         if (deidentModel.isRetain_pid_hash())
-            options.add(DeIdentifier.Option.RetainPatientIDHashOption);
-        DeIdentifier.Option[] opt = options.toArray(new DeIdentifier.Option[0]);
-        deidentifier = new DeIdentifier(deidentModel, opt);
+            options.add(DeIdentifier_dep.Option.RetainPatientIDHashOption);*/
+        DcmDeIdentifier.Option[] opt = options.toArray(new DcmDeIdentifier.Option[0]);
+        deidentifier = new DcmDeIdentifier(opt);
     }
 
     /*public void setDummyValues(int tag, String value) {
