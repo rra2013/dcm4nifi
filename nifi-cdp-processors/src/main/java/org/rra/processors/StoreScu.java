@@ -55,7 +55,7 @@ public class StoreScu extends AbstractProcessor {
 
     public static final PropertyDescriptor CALLED_AET = new PropertyDescriptor.Builder()
             .name("called-AET")
-            .displayName("AET")
+            .displayName("Called AET")
             .description("The AE Title of the remote SCP")
             .defaultValue("DCM4NIFI")
             .required(true)
@@ -65,8 +65,8 @@ public class StoreScu extends AbstractProcessor {
 
     public static final PropertyDescriptor CALLING_AET = new PropertyDescriptor.Builder()
             .name("calling-AET")
-            .displayName("AET")
-            .description("The AE Title of this SCU")
+            .displayName("Calling AET")
+            .description("The Calling AE Title of this SCU")
             .defaultValue("NIFI_SCU")
             .required(true)
             .expressionLanguageSupported(ExpressionLanguageScope.ENVIRONMENT)
