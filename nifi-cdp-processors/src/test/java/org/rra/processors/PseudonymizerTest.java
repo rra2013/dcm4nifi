@@ -81,6 +81,13 @@ public class PseudonymizerTest {
             Assertions.assertEquals("PRE89898BK-164", pid);
             Assertions.assertEquals("PRE89898BK^164", name);
             Assertions.assertEquals("DCM4NIFI", issuer);
+            //
+            String studyIUID_dcm = dcm.getString(Tag.StudyInstanceUID);
+            String seriesIUID_dcm = dcm.getString(Tag.SeriesInstanceUID);
+            String studyIUID = mockFlowFile.getAttribute("StudyInstanceUID");
+            Assertions.assertTrue(studyIUID.equals(studyIUID_dcm));
+            String seriesIUD = mockFlowFile.getAttribute("SeriesInstanceUID");
+            Assertions.assertTrue(seriesIUD.equals(seriesIUID_dcm));
         });
     }
 

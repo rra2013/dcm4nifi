@@ -78,6 +78,8 @@ public class Deidentify extends AbstractProcessor {
         ComponentLog log = getLogger();
         log.info("+ + + On Data from AET: {} + + +", flowFile.getAttribute("CallingAET"));
         try {
+            AtomicReference<String> anonymStudyIUID = new AtomicReference("NO_UID");
+            AtomicReference<String> anonymSeriesIUID = new AtomicReference("NO_UID");
             AtomicReference<String> anonymSOPIUID = new AtomicReference("NO_UID");
             flowFile = session.write(flowFile, (in, out) -> {
                 try (OutputStream buffOut = new BufferedOutputStream(out)) {
@@ -85,8 +87,14 @@ public class Deidentify extends AbstractProcessor {
                         Attributes dcm = GeneralAnonymizer.anonymize(buffIn, buffOut);
                         String sopIUID = dcm.getString(Tag.SOPInstanceUID);
                         anonymSOPIUID.set(sopIUID);
-                        log.debug(" + + + StudyInstanceUID: {}", dcm.getString(Tag.StudyInstanceUID));
-                        log.debug(" + + + SeriesInstanceUID:{}", dcm.getString(Tag.SeriesInstanceUID));
+
+                        String studyIUID = dcm.getString(Tag.StudyInstanceUID);
+                        anonymStudyIUID.set(studyIUID);
+
+                        String seriesIUID = dcm.getString(Tag.SeriesInstanceUID);
+                        anonymSeriesIUID.set(seriesIUID);
+                        log.debug(" + + + StudyInstanceUID: {}", studyIUID);
+                        log.debug(" + + + SeriesInstanceUID:{}", seriesIUID);
                         log.debug(" + + + SOPInstanceUID: {}", sopIUID);
                     } catch (Exception e) {
                         throw new IOException(e);
@@ -95,6 +103,8 @@ public class Deidentify extends AbstractProcessor {
                     throw exception;
                 }
             });
+            flowFile = session.putAttribute(flowFile, "StudyInstanceUID", anonymStudyIUID.get());
+            flowFile = session.putAttribute(flowFile, "SeriesInstanceUID", anonymSeriesIUID.get());
             flowFile = session.putAttribute(flowFile, "AffectedSOPInstanceUID", anonymSOPIUID.get());
             session.getProvenanceReporter().modifyContent(flowFile);
             session.transfer(flowFile, REL_SUCCESS);

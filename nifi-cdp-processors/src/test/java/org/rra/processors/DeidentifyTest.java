@@ -58,7 +58,13 @@ public class DeidentifyTest {
             Sequence sequence = dcm.getSequence(Tag.DeidentificationMethodCodeSequence);
             Assertions.assertNotNull(sequence);
             log.debug("SEQ Size: {}", sequence.size());
+            String studyIUID_dcm = dcm.getString(Tag.StudyInstanceUID);
+            String seriesIUID_dcm = dcm.getString(Tag.SeriesInstanceUID);
             //sequence.forEach(attributes -> log.info("SEQ: {}", attributes));
+            String studyIUID = mockFlowFile.getAttribute("StudyInstanceUID");
+            Assertions.assertTrue(studyIUID.equals(studyIUID_dcm));
+            String seriesIUD = mockFlowFile.getAttribute("SeriesInstanceUID");
+            Assertions.assertTrue(seriesIUD.equals(seriesIUID_dcm));
         });
         log.info("Test De-Identify Processor OK. {} Files were de-identified.", success.size());
         List<MockFlowFile> error = testRunner.getFlowFilesForRelationship(Deidentify.REL_FAILURE);
