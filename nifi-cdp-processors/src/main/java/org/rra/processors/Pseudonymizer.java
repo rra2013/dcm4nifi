@@ -16,6 +16,7 @@ import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.util.StandardValidators;
 import org.dcm4che3.data.Attributes;
 import org.dcm4che3.data.Tag;
+import org.dcm4che3.data.VR;
 import org.rra.deidentify.GeneralAnonymizer;
 import org.rra.deidentify.PseudonymLookupData;
 
@@ -32,8 +33,9 @@ import java.util.concurrent.atomic.AtomicReference;
 @SystemResourceConsideration(resource = SystemResource.CPU)
 @Tags({"CDP","DICOM", "deidentify", "pseudonymizer"})
 @CapabilityDescription("A DICOM De-Identifier and pseudonymizer. Will deidentify DICOM Objects and replace PID"
-        +" and NAME via Database lookup during the NIFI Workflows."
-        +"The chaar ? will be replaced with the PID of the flow file DIOCM Data.")
+        +" and Patient NAME via Database lookup during the NIFI Workflows."
+        +"The character ? will be replaced with the PID of the flow file DIOCM Data for query of the pseudo IDs. (Tag.PatientID, VR.LO, prefix+\"-\"+postfix), "
+        +"(Tag.PatientName, VR.PN, prefix+\"^\"+postfix)")
 @UseCase(description = "The pseudonymizer can be used for de-identify and pseudonymize DICOM Meta Data of DICOM 3 Objects",
         inputRequirement = InputRequirement.Requirement.INPUT_REQUIRED)
 public class Pseudonymizer extends AbstractProcessor {
