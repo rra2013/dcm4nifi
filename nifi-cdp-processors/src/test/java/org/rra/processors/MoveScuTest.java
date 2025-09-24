@@ -42,10 +42,14 @@ public class MoveScuTest {
         //Patient/study level
         testRunner.setProperty(MOVE_LEVEL, STUDY_LEVEL);
         testRunner.setProperty(REMOTE_HOST, DICOM_SERVER_HOST);
+        testRunner.setProperty(MOVE_AET, DICOM_SERVER_MOVE_AET);
         testRunner.setProperty(PORT, Integer.toString(DICOM_SERVER_PORT));
         final Attributes input = new Attributes();
+        //"1.2.840.113845.11.1000000001900555490.20160718102042.2434233,1.3.12.2.1107.5.2.19.45819.2016071811063980705662155.0.0.0"
         String studyInstanceUID = "1.2.840.113845.11.1000000001900555490.20160718102042.2434233";
+        String seriesInstanceUID = "1.3.12.2.1107.5.2.19.45819.2016071811063980705662155.0.0.0";// 5 instances
         input.setString(Tag.StudyInstanceUID, VR.UI, studyInstanceUID);
+        input.setString(Tag.SeriesInstanceUID, VR.UI, seriesInstanceUID);
         try(ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream()){
             try(BufferedOutputStream bos = new BufferedOutputStream(byteArrayOutputStream)){
                 copyAttributesToOutput(input, bos);
@@ -55,7 +59,7 @@ public class MoveScuTest {
                 List<MockFlowFile> failed = testRunner.getFlowFilesForRelationship(REL_FAILURE);
                 log.info("Size of Success: {}", success.size());
                 log.info("Size of failed: {}", failed.size());
-                testRunner.assertAllFlowFilesTransferred(REL_SUCCESS);
+                testRunner.assertAllFlowFilesTransferred(REL_SUCCESS, 1);
             }
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -66,7 +70,9 @@ public class MoveScuTest {
     public void testSCUMoveSeries() throws Exception {
         NifiMoveScu nifiMoveSCU = new NifiMoveScu(DICOM_SERVER_HOST, DICOM_SERVER_PORT, "MOVE_SCU", DICOM_SERVER_AET, DICOM_SERVER_MOVE_AET);
         String studyInstanceUID = "1.2.840.113845.11.1000000001900555490.20160718102042.2434233";
-        String seriesInstanceUID = "1.3.12.2.1107.5.2.19.45819.2016071811120879334462944.0.0.0";
+        String seriesInstanceUID = "1.3.12.2.1107.5.2.19.45819.2016071811073146270262179.0.0.0";//9 instances
+        seriesInstanceUID = "1.3.12.2.1107.5.2.19.45819.2016071811281418616865059.0.0.0";//25 instances
+
         nifiMoveSCU.moveSeries(studyInstanceUID, seriesInstanceUID);
     }
     //@Test

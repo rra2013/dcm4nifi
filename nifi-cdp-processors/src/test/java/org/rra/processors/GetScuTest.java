@@ -45,7 +45,7 @@ public class GetScuTest {
         testRunner.setProperty(REMOTE_HOST, DICOM_SERVER_HOST);
         testRunner.setProperty(PORT, Integer.toString(DICOM_SERVER_PORT));
         final Attributes input = new Attributes();
-        String studyInstanceUID = "1.2.840.113845.11.1000000001900555490.20160718102042.2434233";
+        String studyInstanceUID = "1.2.840.113845.11.1000000001900555490.20160718102042.2434233";//Mr-fuss study
         input.setString(Tag.StudyInstanceUID, VR.UI, studyInstanceUID);
         try (ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream()) {
             try (BufferedOutputStream bos = new BufferedOutputStream(byteArrayOutputStream)) {

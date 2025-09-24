@@ -13,6 +13,7 @@ import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.expression.ExpressionLanguageScope;
 import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.flowfile.attributes.CoreAttributes;
+import org.apache.nifi.logging.ComponentLog;
 import org.apache.nifi.processor.*;
 import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.util.StandardValidators;
@@ -31,7 +32,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-@Slf4j
+
 @SupportsBatching
 @InputRequirement(InputRequirement.Requirement.INPUT_REQUIRED)
 @SideEffectFree
@@ -101,7 +102,7 @@ public class GetScu extends AbstractProcessor {
             .build();
     public static final Relationship REL_FAILURE = new Relationship.Builder()
             .name("failure")
-            .description("DICOM C-Move Failed").build();
+            .description("DICOM C-Get Failed").build();
 
     private List<PropertyDescriptor> descriptors;
 
@@ -129,6 +130,7 @@ public class GetScu extends AbstractProcessor {
         if (flowFile == null) {
             return;
         }
+        final ComponentLog log = getLogger();
         String called_aet = context.getProperty(CALLED_AET).evaluateAttributeExpressions().getValue();
         String calling_aet = context.getProperty(CALLING_AET).evaluateAttributeExpressions().getValue();
         String remoteHost = context.getProperty(REMOTE_HOST).evaluateAttributeExpressions().getValue();
@@ -147,7 +149,11 @@ public class GetScu extends AbstractProcessor {
         try {
             final long t1 = System.nanoTime();
             session.remove(flowFile);
-            session.commitAsync();
+            session.commitAsync( () ->{
+                log.debug("Commit after remove() OK.");
+            }, (t) -> {
+                log.error("Failed to clean up DICOM C-Get process", t);
+            });
             NifiGetScu nifiGetScu = new NifiGetScu(remoteHost, port, calling_aet, called_aet, session, REL_SUCCESS);
             log.info("Level {}", level);
             if (level.equals(STUDY_LEVEL)) {
@@ -173,12 +179,14 @@ public class GetScu extends AbstractProcessor {
             } catch (Exception e) {
                 log.error(e.getMessage(), e);
             }
-            session.putAttribute(flowFile, CoreAttributes.MIME_TYPE.key(), "application/dicom");
+            session.putAttribute(newFlowfile, CoreAttributes.MIME_TYPE.key(), "application/dicom");
             session.transfer(newFlowfile, REL_ORIGINAL);
             session.getProvenanceReporter().route(newFlowfile, REL_ORIGINAL, details, importMillis);
 
             session.commitAsync(() -> {
-                log.info("Transfer Complete");
+                log.info("C-Get Transfer Complete");
+            }, (t) -> {
+                log.error("Error during session commit ", t);
             });
         } catch (Exception e) {
             hasError.set(true);
@@ -198,7 +206,9 @@ public class GetScu extends AbstractProcessor {
             session.getProvenanceReporter().route(newFlowfile, REL_FAILURE);
             session.transfer(newFlowfile, REL_FAILURE);
             session.commitAsync(() -> {
-                log.info("Transfer Complete");
+                log.info("Transfer to failure Complete");
+            }, (t) -> {
+                log.error("Error during session commit ", t);
             });
         }
     }
@@ -223,10 +233,12 @@ public class GetScu extends AbstractProcessor {
 
     @OnScheduled
     protected void start(final ProcessContext context) {
+        final ComponentLog log = getLogger();
         log.info("+ + + Start {} OK. + + +", getClass().getSimpleName());
     }
     @OnStopped
     public void stop(){
+        final ComponentLog log = getLogger();
         log.info("+ + + Stop {} OK. + + +", getClass().getSimpleName());
     }
 }
