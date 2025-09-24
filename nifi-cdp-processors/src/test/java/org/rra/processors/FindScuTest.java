@@ -35,29 +35,47 @@ public class FindScuTest {
         }
         log.info("$ $ $ $ Run FindScu $ $ $ $ $");
         testRunner.setValidateExpressionUsage(false);
+
         //Patient/study level
         testRunner.setProperty(FindScu.QUERY_LEVEL, PATSTUDY_LEVEL);
         testRunner.setProperty(REMOTE_HOST, DICOM_SERVER_HOST);
         testRunner.setProperty(PORT, Integer.toString(DICOM_SERVER_PORT));
-        testRunner.enqueue("56757");
+
+        testRunner.enqueue("56757");//PID von rra fuss
         testRunner.run();
         List<MockFlowFile> success = testRunner.getFlowFilesForRelationship(REL_SUCCESS);
         log.info("Size of Success: {}", success.size());
-        testRunner.assertAllFlowFilesTransferred(REL_SUCCESS, 1);
-        // Series Level
+        testRunner.assertAllFlowFilesTransferred(REL_SUCCESS, 1);//count of studies
+        testRunner.clearTransferState();
+
+        // Series Level with only StudyIUID as parameter
         testRunner.setProperty(FindScu.QUERY_LEVEL, SERIES_LEVEL);
-        testRunner.enqueue("1.2.840.113845.11.1000000001900555490.20160718102042.2434233");
+        testRunner.enqueue("1.2.840.113845.11.1000000001900555490.20160718102042.2434233");// study rra fuss
         testRunner.run();
         success = testRunner.getFlowFilesForRelationship(REL_SUCCESS);
         log.info("Size of Success: {}", success.size());
-        testRunner.assertAllFlowFilesTransferred(REL_SUCCESS,15);
+        testRunner.assertAllFlowFilesTransferred(REL_SUCCESS,14);
+        testRunner.clearTransferState();
+
+
+        // Series Level with (StudyIUID,SeriesIUID) as parameter
+        testRunner.setProperty(FindScu.QUERY_LEVEL, SERIES_LEVEL);
+        //StudyIUID,SeriesIUID
+        testRunner.enqueue("1.2.840.113845.11.1000000001900555490.20160718102042.2434233,1.3.12.2.1107.5.2.19.45819.2016071811063980705662155.0.0.0");// study,series rra fuss
+        testRunner.run();
+        success = testRunner.getFlowFilesForRelationship(REL_SUCCESS);
+        log.info("Size of Success: {}", success.size());
+        testRunner.assertAllFlowFilesTransferred(REL_SUCCESS,1);
+        testRunner.clearTransferState();
+
         //Image level
         testRunner.setProperty(FindScu.QUERY_LEVEL, IMAGE_LEVEL);
+        //StudyIUID and query on image level
         testRunner.enqueue("1.2.840.113845.11.1000000001900555490.20160718102042.2434233");
         testRunner.run();
         success = testRunner.getFlowFilesForRelationship(REL_SUCCESS);
         log.info("Size of Success: {}", success.size());
-        testRunner.assertAllFlowFilesTransferred(REL_SUCCESS,315);
+        testRunner.assertAllFlowFilesTransferred(REL_SUCCESS,300);
 
     }
 
@@ -72,7 +90,7 @@ public class FindScuTest {
         //Error test
         testRunner.setProperty(FindScu.QUERY_LEVEL, PATSTUDY_LEVEL);
         testRunner.setProperty(REMOTE_HOST, "wrong_host");
-        testRunner.enqueue("56757");
+        testRunner.enqueue("56757"); //PID
         testRunner.run();
         List<MockFlowFile> failed = testRunner.getFlowFilesForRelationship(REL_FAILURE);
         log.info("Size of failed: {}", failed.size());
@@ -132,6 +150,19 @@ public class FindScuTest {
             log.info("Data -> \n{}", data);
         });
         Assertions.assertEquals(14, resultSet.size());
+        resultSet.clear();
+
+        findSCU.getQueryFilter().setPatientID("56757");
+        findSCU.getQueryFilter().setIssuerOfPatientID("HANAU");
+        findSCU.getQueryFilter().setStudyInstanceUID("1.2.840.113845.11.1000000001900555490.20160718102042.2434233");
+        findSCU.getQueryFilter().setSeriesInstanceUID("1.3.12.2.1107.5.2.19.45819.2016071811063980705662155.0.0.0");
+        findSCU.doQuery(remote -> {
+            log.info("Concected to host:{}", remote.getHostname());
+        },data -> {
+            resultSet.add(data);
+            log.info("Data -> \n{}", data);
+        });
+        Assertions.assertEquals(1, resultSet.size());
     }
 
     @Test

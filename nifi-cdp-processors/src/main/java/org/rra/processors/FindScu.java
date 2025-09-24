@@ -14,6 +14,7 @@ import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.expression.ExpressionLanguageScope;
 import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.flowfile.attributes.CoreAttributes;
+import org.apache.nifi.logging.ComponentLog;
 import org.apache.nifi.processor.*;
 import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.util.StandardValidators;
@@ -35,9 +36,9 @@ import static org.rra.cfind.NifiFindScu.*;
 @InputRequirement(InputRequirement.Requirement.INPUT_REQUIRED)
 @SideEffectFree
 @SystemResourceConsideration(resource = SystemResource.CPU)
-@Slf4j
 @Tags({"DICOM", "Find-SCU", "CDP"})
-@CapabilityDescription("Make C-Find query to remote SCP. There are three levels of query. patient/Study, Series and Image level. The input is the Flow File body as String. It will be interpreted in different level. In Pat/Study Level is the input the PatientID. In Series and Image level is the input the StudyIUID. The query result creates a flow file for each result item.")
+@CapabilityDescription("Make C-Find query to remote SCP. There are three levels of query. patient/Study, Series and Image level. The input is the Flow File body as String. It will be interpreted in different level. " +
+        "In Pat/Study Level is the input the PatientID. In Series and Image level is the input the StudyIUID or (StudyIUID, SeriesIUID). The query result creates a flow file for each result item.")
 @UseCase(description = "DICOM C-Find to query remote archives. Can be used for DICOM Query/Retrieve process.",
         inputRequirement = InputRequirement.Requirement.INPUT_REQUIRED)
 
@@ -116,6 +117,7 @@ public class FindScu extends AbstractProcessor {
 
     @OnScheduled
     protected void start(final ProcessContext context) {
+        final ComponentLog log = getLogger();
         log.info("+ + + Start {} OK. + + +", getClass().getSimpleName());
     }
 
@@ -125,17 +127,27 @@ public class FindScu extends AbstractProcessor {
         if (flowFile == null) {
             return;
         }
+        final ComponentLog log = getLogger();
         String input = "";
+        String studyIUID = null;
+        String seriesIUID = null;
         try (InputStream inputStream = session.read(flowFile)) {
             input = IOUtils.toString(inputStream, StandardCharsets.UTF_8);
             if (null == input || input.equals("")) {
                 session.transfer(flowFile, REL_FAILURE);
+                return;
             }
         } catch (Exception e) {
             session.transfer(flowFile, REL_FAILURE);
             return;
         }
-
+        String[] split = input.split(",");
+        if (split.length>0){
+            studyIUID = split[0].trim();
+        }
+        if (split.length>1){
+            seriesIUID = split[1].trim();
+        }
         String called_aet = context.getProperty(CALLED_AET).evaluateAttributeExpressions().getValue();
         String calling_aet = context.getProperty(CALLING_AET).evaluateAttributeExpressions().getValue();
         String remoteHost = context.getProperty(REMOTE_HOST).evaluateAttributeExpressions().getValue();
@@ -148,7 +160,21 @@ public class FindScu extends AbstractProcessor {
             findSCU.getQueryFilter().setPatientID(input);
         } else if (level.equals(SERIES_LEVEL)) {
             findSCU = new NifiFindScu(calling_aet, called_aet, remoteHost, port, QUERY_LEVEL_SERIES);
-            findSCU.getQueryFilter().setStudyInstanceUID(input);
+            if (studyIUID != null) {
+                findSCU.getQueryFilter().setStudyInstanceUID(studyIUID);
+                log.info("StudyInstanceUID set to {}", studyIUID);
+            }
+
+            if (seriesIUID != null) {
+                findSCU.getQueryFilter().setSeriesInstanceUID(seriesIUID);
+                log.info("SeriesInstanceUID set to {}", seriesIUID);
+            }
+
+            if (null == studyIUID && null == seriesIUID) {
+                log.error("# # # No Values for the series Level is set # # #");
+                return;
+            }
+
         } else if (level.equals(IMAGE_LEVEL)) {
             findSCU = new NifiFindScu(calling_aet, called_aet, remoteHost, port, QUERY_LEVEL_IMAGE);
             findSCU.getQueryFilter().setStudyInstanceUID(input);
