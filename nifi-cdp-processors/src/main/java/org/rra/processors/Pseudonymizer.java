@@ -36,7 +36,7 @@ import java.util.concurrent.atomic.AtomicReference;
         +" and Patient NAME via Database lookup during the NIFI Workflows."
         +"The character ? will be replaced with the PID of the flow file DIOCM Data for query of the pseudo IDs. (Tag.PatientID, VR.LO, prefix+\"-\"+postfix), "
         +"(Tag.PatientName, VR.PN, prefix+\"^\"+postfix). If a dateShift is selected [date_shift] then the AcquisitionDate will be retained and shifted by the value.")
-@UseCase(description = "The pseudonymizer can be used for de-identify and pseudonymize DICOM Meta Data of DICOM 3 Objects",
+@UseCase(description = "The pseudonymizer can be used for de-identify and pseudonymize DICOM Meta Data of DICOM 3 Objects.",
         inputRequirement = InputRequirement.Requirement.INPUT_REQUIRED)
 public class Pseudonymizer extends AbstractProcessor {
     public static final String RESULT_ERROR_MESSAGE = "executesql.error.message";
