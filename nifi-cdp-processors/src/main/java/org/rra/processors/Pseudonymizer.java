@@ -35,7 +35,7 @@ import java.util.concurrent.atomic.AtomicReference;
 @CapabilityDescription("A DICOM De-Identifier and pseudonymizer. Will deidentify DICOM Objects and replace PID"
         +" and Patient NAME via Database lookup during the NIFI Workflows."
         +"The character ? will be replaced with the PID of the flow file DIOCM Data for query of the pseudo IDs. (Tag.PatientID, VR.LO, prefix+\"-\"+postfix), "
-        +"(Tag.PatientName, VR.PN, prefix+\"^\"+postfix)")
+        +"(Tag.PatientName, VR.PN, prefix+\"^\"+postfix). If a dateShift is selected [date_shift] then the AcquisitionDate will be retained and shifted by the value.")
 @UseCase(description = "The pseudonymizer can be used for de-identify and pseudonymize DICOM Meta Data of DICOM 3 Objects",
         inputRequirement = InputRequirement.Requirement.INPUT_REQUIRED)
 public class Pseudonymizer extends AbstractProcessor {
@@ -49,7 +49,7 @@ public class Pseudonymizer extends AbstractProcessor {
             .build();
     public static final PropertyDescriptor SQL_SELECT_QUERY = new PropertyDescriptor.Builder()
             .name("SQL select query")
-            .description("The SQL select query to execute. Like 'SELECT pid, prefix, postfix FROM pseudonym_table WHERE pid=?'. The '?' will be replaced with the affected PID.")
+            .description("The SQL select query to execute. Like 'SELECT pid, prefix, postfix, [date_shift] FROM pseudonym_table WHERE pid=?'. The '?' will be replaced with the affected PID.")
             .required(false)
             .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
             .expressionLanguageSupported(ExpressionLanguageScope.FLOWFILE_ATTRIBUTES)

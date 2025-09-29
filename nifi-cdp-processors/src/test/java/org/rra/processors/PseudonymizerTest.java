@@ -53,7 +53,7 @@ public class PseudonymizerTest {
 
     @Test
     public void testIncomingConnectionWithDSNeg() throws SQLException {
-        testWithDateShift(-5);
+        testWithDateShift(-500);
     }
     @Test
     public void testIncomingConnectionWithDSNull() throws SQLException {
