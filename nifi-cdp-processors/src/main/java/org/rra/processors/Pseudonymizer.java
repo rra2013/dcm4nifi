@@ -123,7 +123,7 @@ public class Pseudonymizer extends AbstractProcessor {
                             Attributes dcm = GeneralAnonymizer.pseudonymize(buffIn, buffOut, pid -> {
                                 log.info("Got pid:{}", pid);
                                 PseudonymLookupData lookup = lookupDB(con, selectQuery, pid);
-                                log.info("Result Set query pid:{}, prefix:{}, postfix:{}", lookup.getPid(), lookup.getPrefix(), lookup.getPostfix());
+                                log.info("Result Set query pid:{}, prefix:{}, postfix:{}, date_shift:{}", lookup.getPid(), lookup.getPrefix(), lookup.getPostfix(), lookup.getDateShift());
                                 return lookup;
                             });
                             String sopIUID = dcm.getString(Tag.SOPInstanceUID);

@@ -5,6 +5,8 @@ import org.dcm4che3.data.Tag;
 import org.dcm4che3.data.VR;
 import org.dcm4che3.io.DicomEncodingOptions;
 
+import java.util.Calendar;
+import java.util.Date;
 import java.util.EnumSet;
 
 public class Deidentify {
@@ -33,17 +35,18 @@ public class Deidentify {
         deidentifier.setDummyValue(tag, vr, value);
     }*/
 
-    public Attributes deidentifyAttributes(Attributes dataset, boolean remapStSerUIDs, String prefix, String postfix) {
-        dataset = deidentifyAttributes(dataset, remapStSerUIDs);
+    public Attributes deidentifyAttributes(Attributes dataset, boolean remapStSerUIDs, String prefix, String postfix, Integer dateShift) {
+        dataset = deidentifyAttributes(dataset, remapStSerUIDs, dateShift);
         dataset.setString(Tag.PatientID, VR.LO, prefix+"-"+postfix);
         dataset.setString(Tag.PatientName, VR.PN, prefix+"^"+postfix);
         return dataset;
     }
-    public Attributes deidentifyAttributes(Attributes dataset, boolean remapStSerUIDs) {
+    public Attributes deidentifyAttributes(Attributes dataset, boolean remapStSerUIDs, Integer dateShift) {
         //Remap Study IUID, Series IUID, SOP IUID and Frame Of Reference UID
         final String studyIUID = dataset.getString(Tag.StudyInstanceUID, null);
         final String seriesIUID = dataset.getString(Tag.SeriesInstanceUID, null);
         final String frameOfRefUID = dataset.getString(Tag.FrameOfReferenceUID, null);
+        Date acqDate = dataset.getDate(Tag.AcquisitionDate);
         //------------------------------------------------------------------------------------------
         deidentifier.deidentify(dataset);
         //------------------------------------------------------------------------------------------
@@ -62,7 +65,18 @@ public class Deidentify {
 
         }
         //------------------------------------------------------------------------------------------
-        dataset.setString(Tag.IssuerOfPatientID, VR.LO,"DCM4NIFI");
+        // Set date shift if already exists
+        if (null != dateShift && null != acqDate) {
+            if (dateShift != 0) {
+                Calendar cal = Calendar.getInstance();
+                cal.setTime(acqDate);
+                cal.add(Calendar.DAY_OF_MONTH, dateShift);
+                Date dateShifted = cal.getTime();
+                dataset.setDate(Tag.AcquisitionDate, VR.DA, dateShifted);
+            }
+        }
+        //------------------------------------------------------------------------------------------
+        dataset.setString(Tag.IssuerOfPatientID, VR.LO,"IDSC_DCMA");
         //------------------------------------------------------------------------------------------
 
         return dataset;

@@ -21,7 +21,7 @@ public class DataForTest {
     public static final String DICOM_PATH_MR = "/mnt/f/DICOM/MR/";
     public static final String DICOM_SERVER_HOST = "localhost";
     public static final String DICOM_SERVER_AET = "DCM4CHEE";
-    public static final String DICOM_SERVER_MOVE_AET = "DCM4NIFI";
+    public static final String DICOM_SERVER_MOVE_AET = "DCM4MOVE";
     public static final int DICOM_SERVER_PORT = 11112;
     public static final boolean DICOM_INTEGRATION_TESTS = false;
     public static final List<byte[]> DCMOBJECTS = new ArrayList<>();

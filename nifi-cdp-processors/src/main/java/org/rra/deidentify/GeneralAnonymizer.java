@@ -25,7 +25,7 @@ public class GeneralAnonymizer {
     public static Attributes anonymize(InputStream inputStream, OutputStream outputStream) throws IOException {
         final DicomDataReader data = new DicomDataReader(inputStream, retainPixelData);
         final Deidentify deidentify = new Deidentify();
-        final Attributes anonym = deidentify.deidentifyAttributes(data.getAttributes(), true);
+        final Attributes anonym = deidentify.deidentifyAttributes(data.getAttributes(), true, null);
         Attributes fmi = data.getFmi();
         if (null != fmi) {
             fmi = anonym.createFileMetaInformation(fmi.getString(Tag.TransferSyntaxUID));
@@ -50,7 +50,7 @@ public class GeneralAnonymizer {
         }
         final PseudonymLookupData lookupData = lookup.lookup(pid);
         final Deidentify deidentify = new Deidentify();
-        final Attributes anonym = deidentify.deidentifyAttributes(attributes, true, lookupData.getPrefix(), lookupData.getPostfix());
+        final Attributes anonym = deidentify.deidentifyAttributes(attributes, true, lookupData.getPrefix(), lookupData.getPostfix(), lookupData.getDateShift());
         Attributes fmi = data.getFmi();
         if (null != fmi) {
             fmi = anonym.createFileMetaInformation(fmi.getString(Tag.TransferSyntaxUID));
