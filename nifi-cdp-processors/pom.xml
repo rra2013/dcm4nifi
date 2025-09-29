@@ -46,7 +46,7 @@
         <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-groovyx-processors</artifactId>
-            <version>2.2.0-SNAPSHOT</version>
+            <version>${nifi.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -71,19 +71,19 @@
         <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-record</artifactId>
-            <version>2.2.0-SNAPSHOT</version>
+            <version>${nifi.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-record-serialization-service-api</artifactId>
-            <version>2.2.0-SNAPSHOT</version>
+            <version>${nifi.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-mock-record-utils</artifactId>
-            <version>2.2.0-SNAPSHOT</version>
+            <version>${nifi.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
