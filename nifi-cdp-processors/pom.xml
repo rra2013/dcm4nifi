@@ -12,7 +12,7 @@
     <packaging>jar</packaging>
 
     <properties>
-        <dcm4che.version>5.34.0</dcm4che.version>
+        <dcm4che.version>5.34.1</dcm4che.version>
         <jakarta.json.version>2.1.3</jakarta.json.version>
         <nifi.version>2.2.0</nifi.version>
         <groovy.version>4.0.24</groovy.version>

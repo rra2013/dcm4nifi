@@ -12,7 +12,7 @@
     <version>1.0</version>
     <packaging>nar</packaging>
     <properties>
-        <dcm4che.version>5.34.0</dcm4che.version>
+        <dcm4che.version>5.34.1</dcm4che.version>
         <nifi.version>2.2.0</nifi.version>
     </properties>
     <dependencies>
