@@ -35,7 +35,7 @@ import java.util.concurrent.atomic.AtomicReference;
 @CapabilityDescription("A DICOM De-Identifier and pseudonymizer. Will deidentify DICOM Objects and replace PID"
         +" and Patient NAME via Database lookup during the NIFI Workflows."
         +"The character ? will be replaced with the PID of the flow file DIOCM Data for query of the pseudo IDs. (Tag.PatientID, VR.LO, prefix+\"-\"+postfix), "
-        +"(Tag.PatientName, VR.PN, prefix+\"^\"+postfix). If a dateShift is selected [date_shift] then the AcquisitionDate will be retained and shifted by the value.")
+        +"(Tag.PatientName, VR.PN, prefix+\"^\"+postfix). If a dateShift is selected [date_shift] then the AcquisitionDate,AcquisitionDateTime and StudyDate will be retained and shifted by the value.")
 @UseCase(description = "The pseudonymizer can be used for de-identify and pseudonymize DICOM Meta Data of DICOM 3 Objects.",
         inputRequirement = InputRequirement.Requirement.INPUT_REQUIRED)
 public class Pseudonymizer extends AbstractProcessor {
@@ -53,6 +53,13 @@ public class Pseudonymizer extends AbstractProcessor {
             .required(false)
             .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
             .expressionLanguageSupported(ExpressionLanguageScope.FLOWFILE_ATTRIBUTES)
+            .build();
+
+    public static final PropertyDescriptor RETAIN_TAGS = new PropertyDescriptor.Builder()
+            .name("Retain Tags")
+            .description("This tags will be retained during the NIFI Workflows separated by \",\". For example: AcquisitionDate,AcquisitionDateTime,StudyDate,ContrastBolusAgent ")
+            .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
+            .required(false)
             .build();
 
     public static final Relationship REL_SUCCESS = new Relationship.Builder()
@@ -73,7 +80,7 @@ public class Pseudonymizer extends AbstractProcessor {
 
     @Override
     protected void init(final ProcessorInitializationContext context) {
-        descriptors = List.of(DBCP_SERVICE, SQL_SELECT_QUERY);
+        descriptors = List.of(DBCP_SERVICE, SQL_SELECT_QUERY, RETAIN_TAGS);
         relationships = Set.of(REL_SUCCESS, REL_FAILURE);
     }
     @Override
@@ -111,6 +118,11 @@ public class Pseudonymizer extends AbstractProcessor {
             session.transfer(flowFile, REL_FAILURE);
             return;
         }
+        AtomicReference<String> retaintags = new AtomicReference<>();
+        if (context.getProperty(RETAIN_TAGS).isSet()) {
+            String retainValue = context.getProperty(RETAIN_TAGS).getValue();
+            retaintags.set(retainValue);
+        }
         log.info("+ + + On Data from AET: {} + + +", flowFile.getAttribute("CallingAET"));
         try (final Connection con = dbcpService.getConnection()) {
             try {
@@ -120,7 +132,7 @@ public class Pseudonymizer extends AbstractProcessor {
                 flowFile = session.write(flowFile, (in, out) -> {
                     try (OutputStream buffOut = new BufferedOutputStream(out)) {
                         try (InputStream buffIn = new BufferedInputStream(in)) {
-                            Attributes dcm = GeneralAnonymizer.pseudonymize(buffIn, buffOut, pid -> {
+                            Attributes dcm = GeneralAnonymizer.pseudonymize(buffIn, buffOut, retaintags.get() , pid -> {
                                 log.info("Got pid:{}", pid);
                                 PseudonymLookupData lookup = lookupDB(con, selectQuery, pid);
                                 log.info("Result Set query pid:{}, prefix:{}, postfix:{}, date_shift:{}", lookup.getPid(), lookup.getPrefix(), lookup.getPostfix(), lookup.getDateShift());

@@ -1,13 +1,12 @@
 package org.rra.deidentify;
 
 import org.dcm4che3.data.Attributes;
+import org.dcm4che3.data.ElementDictionary;
 import org.dcm4che3.data.Tag;
 import org.dcm4che3.data.VR;
 import org.dcm4che3.io.DicomEncodingOptions;
 
-import java.util.Calendar;
-import java.util.Date;
-import java.util.EnumSet;
+import java.util.*;
 
 public class Deidentify {
 
@@ -35,18 +34,23 @@ public class Deidentify {
         deidentifier.setDummyValue(tag, vr, value);
     }*/
 
-    public Attributes deidentifyAttributes(Attributes dataset, boolean remapStSerUIDs, String prefix, String postfix, Integer dateShift) {
-        dataset = deidentifyAttributes(dataset, remapStSerUIDs, dateShift);
+    public Attributes deidentifyAttributes(Attributes dataset, String retainTags, boolean remapStSerUIDs, String prefix, String postfix, Integer dateShift) {
+        dataset = deidentifyAttributes(dataset, retainTags, remapStSerUIDs, dateShift);
         dataset.setString(Tag.PatientID, VR.LO, prefix+"-"+postfix);
         dataset.setString(Tag.PatientName, VR.PN, prefix+"^"+postfix);
         return dataset;
     }
-    public Attributes deidentifyAttributes(Attributes dataset, boolean remapStSerUIDs, Integer dateShift) {
+    public Attributes deidentifyAttributes(Attributes dataset, String retainTags, boolean remapStSerUIDs, Integer dateShift) {
         //Remap Study IUID, Series IUID, SOP IUID and Frame Of Reference UID
         final String studyIUID = dataset.getString(Tag.StudyInstanceUID, null);
         final String seriesIUID = dataset.getString(Tag.SeriesInstanceUID, null);
         final String frameOfRefUID = dataset.getString(Tag.FrameOfReferenceUID, null);
+        // Save for date shift
         Date acqDate = dataset.getDate(Tag.AcquisitionDate);
+        Date acqDateTime = dataset.getDate(Tag.AcquisitionDateTime);
+        Date studyDate = dataset.getDate(Tag.StudyDate);
+        //------------------------------------------------------------------------------------------
+        final List<AuxTag> retainTagsList = getRetainTagsList(retainTags, dataset);
         //------------------------------------------------------------------------------------------
         deidentifier.deidentify(dataset);
         //------------------------------------------------------------------------------------------
@@ -68,13 +72,27 @@ public class Deidentify {
         // Set date shift if already exists
         if (null != dateShift && null != acqDate) {
             if (dateShift != 0) {
-                Calendar cal = Calendar.getInstance();
-                cal.setTime(acqDate);
-                cal.add(Calendar.DAY_OF_MONTH, dateShift);
-                Date dateShifted = cal.getTime();
-                dataset.setDate(Tag.AcquisitionDate, VR.DA, dateShifted);
+                dataset.setDate(Tag.AcquisitionDate, VR.DA, shiftDate(acqDate, dateShift));
             }
         }
+        if (null != dateShift && null != acqDateTime) {
+            if (dateShift != 0) {
+                dataset.setDate(Tag.AcquisitionDateTime, VR.DA, shiftDate(acqDateTime, dateShift));
+            }
+        }
+        if (null != dateShift && null != studyDate) {
+            if (dateShift != 0) {
+                dataset.setDate(Tag.StudyDate, VR.DA, shiftDate(studyDate, dateShift));
+            }
+        }
+        //------------------------------------------------------------------------------------------
+        // Apply Retain Tags
+        retainTagsList.forEach(aux -> {
+            int tag = aux.tag;
+            VR vr = aux.vr;
+            String value = aux.value;
+            dataset.setString(tag,vr, value);
+        });
         //------------------------------------------------------------------------------------------
         dataset.setString(Tag.IssuerOfPatientID, VR.LO,"IDSC_DCMA");
         //------------------------------------------------------------------------------------------
@@ -82,4 +100,45 @@ public class Deidentify {
         return dataset;
     }
 
+    private Date shiftDate(Date date, int shift) {
+        Calendar cal = Calendar.getInstance();
+        cal.setTime(date);
+        cal.add(Calendar.DAY_OF_MONTH, shift);
+        return cal.getTime();
+    }
+    List<AuxTag> getRetainTagsList(String retainTags, Attributes dataset) {
+        if (null == retainTags || retainTags.isEmpty()) {
+            return Collections.emptyList();
+        }
+        final List<AuxTag> list = new ArrayList<>();
+        String[] split = retainTags.split(",");
+        List<String> retainTagsList = Arrays.asList(split);
+        retainTagsList.forEach(sTag -> {
+            final String name = sTag.trim();
+            final int tag = ElementDictionary.getStandardElementDictionary().tagForKeyword(name);
+            if (tag >=0) { //Valid tag
+                final VR vr = ElementDictionary.getStandardElementDictionary().vrOf(tag);
+                final String val = dataset.getString(tag, null);
+                if (null != val) {
+                    AuxTag auxTag = new AuxTag(tag, val, vr, name);
+                    list.add(auxTag);
+                }
+            }
+        });
+        return list;
+    }
+
+
+    private static class AuxTag{
+        public final int tag;
+        public final String value;
+        public final VR vr;
+        public final String name;
+        public AuxTag(int tag, String value, VR vr, String name) {
+            this.tag = tag;
+            this.value = value;
+            this.vr = vr;
+            this.name = name;
+        }
+    }
 }
