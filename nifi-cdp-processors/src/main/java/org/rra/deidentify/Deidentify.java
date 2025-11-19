@@ -46,9 +46,11 @@ public class Deidentify {
         final String seriesIUID = dataset.getString(Tag.SeriesInstanceUID, null);
         final String frameOfRefUID = dataset.getString(Tag.FrameOfReferenceUID, null);
         // Save for date shift
-        Date acqDate = dataset.getDate(Tag.AcquisitionDate);
-        Date acqDateTime = dataset.getDate(Tag.AcquisitionDateTime);
-        Date studyDate = dataset.getDate(Tag.StudyDate);
+        final Date acqDate = dataset.getDate(Tag.AcquisitionDate);
+        final Date acqDateTime = dataset.getDate(Tag.AcquisitionDateTime);
+        final Date studyDate = dataset.getDate(Tag.StudyDate);
+        final Date seriesDate = dataset.getDate(Tag.SeriesDate);
+        final Date contentDate = dataset.getDate(Tag.ContentDate);
         //------------------------------------------------------------------------------------------
         final List<AuxTag> retainTagsList = getRetainTagsList(retainTags, dataset);
         //------------------------------------------------------------------------------------------
@@ -83,6 +85,16 @@ public class Deidentify {
         if (null != dateShift && null != studyDate) {
             if (dateShift != 0) {
                 dataset.setDate(Tag.StudyDate, VR.DA, shiftDate(studyDate, dateShift));
+            }
+        }
+        if (null != dateShift && null != seriesDate) {
+            if (dateShift != 0) {
+                dataset.setDate(Tag.SeriesDate, VR.DA, shiftDate(seriesDate, dateShift));
+            }
+        }
+        if (null != dateShift && null != contentDate) {
+            if (dateShift != 0) {
+                dataset.setDate(Tag.ContentDate, VR.DA, shiftDate(contentDate, dateShift));
             }
         }
         //------------------------------------------------------------------------------------------
