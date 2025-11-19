@@ -79,7 +79,7 @@ public class Deidentify {
         }
         if (null != dateShift && null != acqDateTime) {
             if (dateShift != 0) {
-                dataset.setDate(Tag.AcquisitionDateTime, VR.DA, shiftDate(acqDateTime, dateShift));
+                dataset.setDate(Tag.AcquisitionDateTime, VR.DT, shiftDate(acqDateTime, dateShift));
             }
         }
         if (null != dateShift && null != studyDate) {
