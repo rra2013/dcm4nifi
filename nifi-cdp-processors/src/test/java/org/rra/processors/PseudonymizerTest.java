@@ -209,18 +209,21 @@ public class PseudonymizerTest {
 
         List<Date> acqDates = new ArrayList<>();
         List<String> accNr = new ArrayList<>();
+        List<String> sopIUIDs = new ArrayList<>();
+
 
         stmt.execute("create table TEST_PSEUDONYMIZER (id integer not null, pid varchar(45), prefix varchar(50),postfix varchar(45), date_shift integer not null ,constraint my_pk primary key (id))");
         stmt.execute("insert into TEST_PSEUDONYMIZER (id, pid, prefix, postfix, date_shift) VALUES (0,'4025765337', 'PRE89898BK', '164' , 0)");
         runner.setIncomingConnection(true);
         runner.setProperty(Pseudonymizer.SQL_SELECT_QUERY, "SELECT pid, prefix, postfix FROM TEST_PSEUDONYMIZER where pid=?");
-        runner.setProperty(Pseudonymizer.RETAIN_TAGS, "AcquisitionDate, AccessionNumber");
+        runner.setProperty(Pseudonymizer.RETAIN_TAGS, "AcquisitionDate, AccessionNumber, SOPInstanceUID");
         //prepare Input
         dcmObjects.forEach(dcmFileArray -> {
             Attributes dcm = DicomUtils.byteArrayToAttributes(dcmFileArray);
             // save attribute
             acqDates.add(dcm.getDate(Tag.AcquisitionDate));
             accNr.add(dcm.getString(Tag.AccessionNumber, ""));
+            sopIUIDs.add(dcm.getString(Tag.SOPInstanceUID, ""));
             //
             HashMap<String, String> attr = new HashMap<>();
             attr.put("CallingAET", "TEST_RUNNER");
@@ -231,7 +234,6 @@ public class PseudonymizerTest {
         runner.assertAllFlowFilesTransferred(Pseudonymizer.REL_SUCCESS);
         // Read out put
         List<MockFlowFile> success = runner.getFlowFilesForRelationship(Pseudonymizer.REL_SUCCESS);
-        AtomicInteger ctr = new AtomicInteger(0);
         AtomicInteger ctrAcc = new AtomicInteger(0);
         success.forEach(mockFlowFile -> {
             byte[] readAnonym = mockFlowFile.toByteArray();
@@ -242,6 +244,7 @@ public class PseudonymizerTest {
 
             Date acqDate = dcm.getDate(Tag.AcquisitionDate);
             String accessionNumber = dcm.getString(Tag.AccessionNumber);
+            String sopIUID = dcm.getString(Tag.SOPInstanceUID);
 
             Assertions.assertEquals("PRE89898BK-164", pid);
             Assertions.assertEquals("PRE89898BK^164", name);
@@ -250,10 +253,12 @@ public class PseudonymizerTest {
             // Assert retain tags
             String accNrVerify = accNr.get(ctrAcc.get());
             Date acqDateVerify = acqDates.get(ctrAcc.get());
+            String sopIUIDVerify = sopIUIDs.get(ctrAcc.get());
             ctrAcc.incrementAndGet();
             //
             Assertions.assertEquals(accessionNumber, accNrVerify);
             Assertions.assertEquals(acqDate, acqDateVerify);
+            Assertions.assertEquals(sopIUID, sopIUIDVerify);
             //
             String studyIUID_dcm = dcm.getString(Tag.StudyInstanceUID);
             String seriesIUID_dcm = dcm.getString(Tag.SeriesInstanceUID);
