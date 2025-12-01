@@ -171,7 +171,9 @@ public class FindScu extends AbstractProcessor {
             }
 
             if (null == studyIUID && null == seriesIUID) {
+                log.info("# # # No Values for the series Level is set # # # studyIUID {}, seriesIUID {}",studyIUID,seriesIUID);
                 log.error("# # # No Values for the series Level is set # # #");
+                session.transfer(flowFile, REL_FAILURE);
                 return;
             }
 
@@ -180,6 +182,7 @@ public class FindScu extends AbstractProcessor {
             findSCU.getQueryFilter().setStudyInstanceUID(input);
         } else {
             log.error("# # # No Level is set # # #");
+            session.transfer(flowFile, REL_FAILURE);
             return;
         }
 
