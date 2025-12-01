@@ -178,6 +178,8 @@ public class GetScu extends AbstractProcessor {
                 }
             } catch (Exception e) {
                 log.error(e.getMessage(), e);
+                session.transfer(flowFile, REL_FAILURE);
+                return;
             }
             session.putAttribute(newFlowfile, CoreAttributes.MIME_TYPE.key(), "application/dicom");
             session.transfer(newFlowfile, REL_ORIGINAL);
