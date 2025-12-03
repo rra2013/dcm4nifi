@@ -181,9 +181,9 @@ public class DcmDeIdentifier {
             Tag.VisitComments,
             //InselGruppe
             Tag.SourceApplicationEntityTitle,
-            Tag.RTReferencedStudySequence,
+            Tag.RTReferencedStudySequence, // CAIRO
             Tag.ReferencedSeriesSequence,
-            Tag.RTReferencedSeriesSequence,
+            Tag.RTReferencedSeriesSequence, //CAIRO
             Tag.PerformedSeriesSequence,
             Tag.PerformedProcedureStepStatus,
             Tag.WaveformFilterDescription,
@@ -862,10 +862,15 @@ public class DcmDeIdentifier {
      */
     private void deidentifyItem(Attributes attrs, List<Deidentify.AuxTag> retainTagsList) {
 
-        Map<Integer,String> valuesRetain = new HashMap<>();
+        Map<Integer,Object> valuesRetain = new HashMap<>();
         retainTagsList.forEach(tag -> {
-            String valueStr = attrs.getString(tag.getTag());
-            valuesRetain.put(tag.getTag(), valueStr);
+            if (tag.getVr() == VR.SQ){
+                Sequence sequence = attrs.getSequence(tag.getTag());
+                valuesRetain.put(tag.getTag(), sequence);
+            }else{
+                String valueStr = attrs.getString(tag.getTag());
+                valuesRetain.put(tag.getTag(), valueStr);
+            }
         });
 
         attrs.removePrivateAttributes();
@@ -890,11 +895,23 @@ public class DcmDeIdentifier {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
-        retainTagsList.forEach(tag -> {
-            String valueStr = valuesRetain.get(tag.getTag());
-            attrs.setString(tag.getTag(), tag.getVr(), valueStr);
+        valuesRetain.forEach((tag,value) -> {
+            VR vr = ElementDictionary.getStandardElementDictionary().vrOf(tag);
+            if (vr == VR.SQ) {
+                Sequence originalSeq = (Sequence) value;
+                if (originalSeq != null) {
+                    Sequence newSeq = attrs.newSequence(tag, originalSeq.size());
+                    for (Attributes item : originalSeq) {
+                        newSeq.add(new Attributes(item)); // Deep copy
+                    }
+                }
+            } else {
+                String s = (String) value;
+                if (s != null) {
+                    attrs.setString(tag, vr, s);
+                }
+            }
         });
-
     }
 
     public enum Option {
