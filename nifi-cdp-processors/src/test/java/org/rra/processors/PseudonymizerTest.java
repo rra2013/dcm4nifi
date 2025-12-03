@@ -400,7 +400,9 @@ public class PseudonymizerTest {
 
     @Test
     public void retainTagsProcessTestWithDateshift() throws Exception {
-
+        /*
+            Date shift overrides retain tags
+         */
         //Test with date shift and retain AcquisitionDate and AccessionNumber
         final File dbLocation = new File(DB_LOCATION);
         dbLocation.delete();
@@ -438,7 +440,6 @@ public class PseudonymizerTest {
         runner.assertAllFlowFilesTransferred(Pseudonymizer.REL_SUCCESS);
         // Read out put
         List<MockFlowFile> success = runner.getFlowFilesForRelationship(Pseudonymizer.REL_SUCCESS);
-        AtomicInteger ctr = new AtomicInteger(0);
         AtomicInteger ctrAcc = new AtomicInteger(0);
         success.forEach(mockFlowFile -> {
             byte[] readAnonym = mockFlowFile.toByteArray();
@@ -462,8 +463,11 @@ public class PseudonymizerTest {
             ctrAcc.incrementAndGet();
             //
             Assertions.assertEquals(accessionNumber, accNrVerify);
-            Assertions.assertEquals(acqDate, acqDateVerify);
-            Assertions.assertEquals(studyDate, studyDateVerify);
+            //
+            // Date shift overrides retain tags
+            Assertions.assertNotEquals(acqDate, acqDateVerify); // Date is shifted
+            Assertions.assertNotEquals(studyDate, studyDateVerify); // date is shifted
+            log.info(" + + + ds:StudyDate: {}, orig:StudyDate:{}", studyDate, studyDateVerify);
             //
             String studyIUID_dcm = dcm.getString(Tag.StudyInstanceUID);
             String seriesIUID_dcm = dcm.getString(Tag.SeriesInstanceUID);
