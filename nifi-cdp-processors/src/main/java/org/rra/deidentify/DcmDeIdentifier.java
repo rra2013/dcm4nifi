@@ -794,7 +794,6 @@ public class DcmDeIdentifier {
     public void setDummyValue(int tag, VR vr, String s) {
         dummyValues.setString(tag, vr, s);
     }
-
     public void deidentify(Attributes attrs, final List<Deidentify.AuxTag> retainTagsList) {
         IDWithIssuer pid = options.contains(Option.RetainPatientIDHashOption) ? IDWithIssuer.pidOf(attrs) : null;
         deidentifyItem(attrs, retainTagsList);
@@ -836,7 +835,11 @@ public class DcmDeIdentifier {
             log.debug("Set Dummy Value For Tag:{}, VR:{}, newVR:{}, Dummy:{}", dict.keywordOf(tag), dict.vrOf(tag), vr, dummy);
             dummyValues.setString(tag, vr, dummy);
         } else {
-            log.info("No Dummy Value For Tag:{}, VR:{}, newVR:{}, Dummy:'{}'", dict.keywordOf(tag), dict.vrOf(tag), vr, dummy);
+            if (vr == VR.UN){
+                dummyValues.setBytes(tag, vr,  new byte[]{0});
+            }else{
+                log.info("No Dummy Value For Tag:{}, VR:{}, newVR:{}, Dummy:'{}'", dict.keywordOf(tag), dict.vrOf(tag), vr, dummy);
+            }
         }
     }
 
