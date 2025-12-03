@@ -795,9 +795,9 @@ public class DcmDeIdentifier {
         dummyValues.setString(tag, vr, s);
     }
 
-    public void deidentify(Attributes attrs) {
+    public void deidentify(Attributes attrs, final List<Deidentify.AuxTag> retainTagsList) {
         IDWithIssuer pid = options.contains(Option.RetainPatientIDHashOption) ? IDWithIssuer.pidOf(attrs) : null;
-        deidentifyItem(attrs);
+        deidentifyItem(attrs, retainTagsList);
         correct(attrs);
         if (pid != null) attrs.setString(Tag.PatientID, VR.LO, hash(pid));
         attrs.setString(Tag.PatientIdentityRemoved, VR.CS, YES);
@@ -809,7 +809,7 @@ public class DcmDeIdentifier {
             sq.add(option.code.toItem());
             allMeanings.add(option.code.getCodeMeaning());
         }
-        //InselGruppe
+        //Recommended
         attrs.setString(Tag.DeidentificationMethod, VR.LO, allMeanings.toArray(new String[0]));
     }
 
@@ -849,17 +849,25 @@ public class DcmDeIdentifier {
     }
 
     /**
-     * @param attrs Sequence elements are anonymized by using
-     *              this same table of attributes for each
-     *              element in the sequence.
-     *              Tag.ContentSequence,
-     *              Tag.PersonIdentificationCodeSequence,
-     *              Tag.VerifyingObserverSequence,
-     *              Tag.GraphicAnnotationSequence,
-     *              Tag.FlowIdentifierSequence,
-     *              will be visited
+     * @param attrs          Sequence elements are anonymized by using
+     *                       this same table of attributes for each
+     *                       element in the sequence.
+     *                       Tag.ContentSequence,
+     *                       Tag.PersonIdentificationCodeSequence,
+     *                       Tag.VerifyingObserverSequence,
+     *                       Tag.GraphicAnnotationSequence,
+     *                       Tag.FlowIdentifierSequence,
+     *                       will be visited
+     * @param retainTagsList
      */
-    private void deidentifyItem(Attributes attrs) {
+    private void deidentifyItem(Attributes attrs, List<Deidentify.AuxTag> retainTagsList) {
+
+        Map<Integer,String> valuesRetain = new HashMap<>();
+        retainTagsList.forEach(tag -> {
+            String valueStr = attrs.getString(tag.getTag());
+            valuesRetain.put(tag.getTag(), valueStr);
+        });
+
         attrs.removePrivateAttributes();
         attrs.removeCurveData();
         attrs.removeOverlayData();
@@ -868,19 +876,25 @@ public class DcmDeIdentifier {
         if (!options.contains(Option.RetainUIDsOption)) {
             attrs.replaceUIDSelected(u);
         }
+
         try {
             attrs.accept(new Attributes.Visitor() {
                 @Override
                 public boolean visit(Attributes attrs, int tag, VR vr, Object value) throws Exception {
                     if (value instanceof Sequence)
                         for (Attributes item : (Sequence) value)
-                            deidentifyItem(item);
+                            deidentifyItem(item, retainTagsList);
                     return true;
                 }
             }, false);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+        retainTagsList.forEach(tag -> {
+            String valueStr = valuesRetain.get(tag.getTag());
+            attrs.setString(tag.getTag(), tag.getVr(), valueStr);
+        });
+
     }
 
     public enum Option {

@@ -13,10 +13,8 @@ import org.apache.nifi.reporting.InitializationException;
 import org.apache.nifi.util.MockFlowFile;
 import org.apache.nifi.util.TestRunner;
 import org.apache.nifi.util.TestRunners;
-import org.dcm4che3.data.Attributes;
-import org.dcm4che3.data.ElementDictionary;
+import org.dcm4che3.data.*;
 import org.dcm4che3.data.Tag;
-import org.dcm4che3.data.VR;
 import org.junit.jupiter.api.*;
 import org.mockito.Mockito;
 import org.rra.dcm.DicomUtils;
@@ -38,13 +36,16 @@ public class PseudonymizerTest {
     final static String DB_LOCATION = "target/db";
 
     private static List<byte[]> dcmObjects = new ArrayList<>();
+    private static List<byte[]> rtObjects = new ArrayList<>();
     private TestRunner runner;
 
     @BeforeAll
     public static void readData() {
         //Get DICOM Files
         dcmObjects = DataForTest.DCMOBJECTS;
+        rtObjects = DataForTest.DCM_RT_OBJECTS;
         Assertions.assertTrue(dcmObjects.size() > 0);
+        Assertions.assertTrue(rtObjects.size() > 0);
     }
 
     @BeforeEach
@@ -266,6 +267,133 @@ public class PseudonymizerTest {
             Assertions.assertTrue(studyIUID.equals(studyIUID_dcm));
             String seriesIUD = mockFlowFile.getAttribute("SeriesInstanceUID");
             Assertions.assertTrue(seriesIUD.equals(seriesIUID_dcm));
+        });
+
+    }
+
+    @Test
+    public void retainTagsInSeqProcessTest() throws Exception {
+
+        //Test with date shift and retain AcquisitionDate and AccessionNumber
+        final File dbLocation = new File(DB_LOCATION);
+        dbLocation.delete();
+        final Connection con = ((DBCPService) runner.getControllerService("dbcp")).getConnection();
+        Statement stmt = con.createStatement();
+
+        try {
+            stmt.execute("drop table TEST_PSEUDONYMIZER");
+        } catch (final SQLException ignored) {
+        }
+
+        stmt.execute("create table TEST_PSEUDONYMIZER (id integer not null, pid varchar(45), prefix varchar(50),postfix varchar(45), date_shift integer not null ,constraint my_pk primary key (id))");
+        stmt.execute("insert into TEST_PSEUDONYMIZER (id, pid, prefix, postfix, date_shift) VALUES (0,'0001900919', 'PRE89898BK', '164' , 0)");
+        runner.setIncomingConnection(true);
+        runner.setProperty(Pseudonymizer.SQL_SELECT_QUERY, "SELECT pid, prefix, postfix FROM TEST_PSEUDONYMIZER where pid=?");
+        runner.setProperty(Pseudonymizer.RETAIN_TAGS, "ReferencedSOPInstanceUID, SOPInstanceUID");
+        HashMap<String, Sequence> retainMap = new HashMap<>();
+        rtObjects.forEach(rtFileArray -> {
+            Attributes dcm = DicomUtils.byteArrayToAttributes(rtFileArray);
+            //log.info("Patient ID {}",dcm.getString(Tag.PatientID));
+            //
+            Sequence sequence = dcm.getSequence(Tag.ReferencedStructureSetSequence);
+            if (sequence != null) {
+                sequence.forEach(sequenceItem -> {
+                    String refSop = sequenceItem.getString(Tag.ReferencedSOPInstanceUID, null);
+                    if (null != refSop) {
+                        log.info(" - " + refSop);
+                    }
+                });
+                String sopIUID = dcm.getString(Tag.SOPInstanceUID);
+                retainMap.put(sopIUID, sequence);
+            }
+            HashMap<String, String> attr = new HashMap<>();
+            attr.put("CallingAET", "TEST_RUNNER");
+            runner.enqueue(rtFileArray, attr);
+            runner.run();
+        });
+        //Assert all are done in success
+        runner.assertAllFlowFilesTransferred(Pseudonymizer.REL_SUCCESS);
+        // Read out put
+        List<MockFlowFile> success = runner.getFlowFilesForRelationship(Pseudonymizer.REL_SUCCESS);
+        success.forEach(mockFlowFile -> {
+            byte[] readAnonym = mockFlowFile.toByteArray();
+            Attributes dcm = DicomUtils.byteArrayToAttributes(readAnonym);
+            String pid = dcm.getString(Tag.PatientID);
+            String name = dcm.getString(Tag.PatientName);
+            String issuer = dcm.getString(Tag.IssuerOfPatientID);
+
+            Assertions.assertEquals("PRE89898BK-164", pid);
+            Assertions.assertEquals("PRE89898BK^164", name);
+            Assertions.assertEquals("IDSC_DCMA", issuer);
+
+            // Assert retain tags
+            Sequence sequence = dcm.getSequence(Tag.ReferencedStructureSetSequence);
+            sequence.forEach(sequenceItem -> {
+                String refSop = sequenceItem.getString(Tag.ReferencedSOPInstanceUID, null);
+                if (null != refSop) {
+                    log.info(" + " + refSop);
+                    String sopIUID = dcm.getString(Tag.SOPInstanceUID);
+                    Sequence attributes = retainMap.get(sopIUID);
+                    attributes.forEach(attributeItem -> {
+                        String refSopVerify = attributeItem.getString(Tag.ReferencedSOPInstanceUID, null);
+                        if (null != refSopVerify) {
+                            log.info(" - " + refSopVerify);
+                            Assertions.assertEquals(refSop, refSopVerify);
+                        }
+                    });
+                }
+            });
+            //
+
+        });
+        //
+        // Test errors
+        //
+        runner.setProperty(Pseudonymizer.RETAIN_TAGS, "SOPInstanceUID");
+        runner.clearTransferState();
+
+        rtObjects.forEach(rtFileArray -> {
+            Attributes dcm = DicomUtils.byteArrayToAttributes(rtFileArray);
+            //
+            Sequence sequence = dcm.getSequence(Tag.ReferencedStructureSetSequence);
+            if (sequence != null) {
+                sequence.forEach(sequenceItem -> {
+                    String refSop = sequenceItem.getString(Tag.ReferencedSOPInstanceUID, null);
+                    if (null != refSop) {
+                        log.info(" % " + refSop);
+                    }
+                });
+            }
+            HashMap<String, String> attr = new HashMap<>();
+            attr.put("CallingAET", "TEST_RUNNER");
+            runner.enqueue(rtFileArray, attr);
+            runner.run();
+        });
+        runner.assertAllFlowFilesTransferred(Pseudonymizer.REL_SUCCESS);
+
+        success = runner.getFlowFilesForRelationship(Pseudonymizer.REL_SUCCESS);
+        success.forEach(mockFlowFile -> {
+            byte[] readAnonym = mockFlowFile.toByteArray();
+            Attributes dcm = DicomUtils.byteArrayToAttributes(readAnonym);
+            // Assert retain tags
+            Sequence sequence = dcm.getSequence(Tag.ReferencedStructureSetSequence);
+            sequence.forEach(sequenceItem -> {
+                String refSop = sequenceItem.getString(Tag.ReferencedSOPInstanceUID, null);
+                if (null != refSop) {
+                    log.info(" + " + refSop);
+                    String sopIUID = dcm.getString(Tag.SOPInstanceUID);
+                    Sequence attributes = retainMap.get(sopIUID);
+                    attributes.forEach(attributeItem -> {
+                        String refSopVerify = attributeItem.getString(Tag.ReferencedSOPInstanceUID, null);
+                        if (null != refSopVerify) {
+                            log.info(" - " + refSopVerify);
+                            Assertions.assertNotEquals(refSop, refSopVerify);
+                        }
+                    });
+                }
+            });
+            //
+
         });
 
     }

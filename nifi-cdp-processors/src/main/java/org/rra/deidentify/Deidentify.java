@@ -1,5 +1,7 @@
 package org.rra.deidentify;
 
+import lombok.AllArgsConstructor;
+import lombok.Data;
 import org.dcm4che3.data.Attributes;
 import org.dcm4che3.data.ElementDictionary;
 import org.dcm4che3.data.Tag;
@@ -52,9 +54,9 @@ public class Deidentify {
         final Date seriesDate = dataset.getDate(Tag.SeriesDate);
         final Date contentDate = dataset.getDate(Tag.ContentDate);
         //------------------------------------------------------------------------------------------
-        final List<AuxTag> retainTagsList = getRetainTagsList(retainTags, dataset);
+        final List<AuxTag> retainTagsList = getRetainTagsList(retainTags);
         //------------------------------------------------------------------------------------------
-        deidentifier.deidentify(dataset);
+        deidentifier.deidentify(dataset, retainTagsList);
         //------------------------------------------------------------------------------------------
         if (remapStSerUIDs) {
             if (studyIUID != null && seriesIUID != null) {
@@ -99,12 +101,12 @@ public class Deidentify {
         }
         //------------------------------------------------------------------------------------------
         // Apply Retain Tags
-        retainTagsList.forEach(aux -> {
+       /* retainTagsList.forEach(aux -> {
             int tag = aux.tag;
             VR vr = aux.vr;
             String value = aux.value;
             dataset.setString(tag,vr, value);
-        });
+        });*/
         //------------------------------------------------------------------------------------------
         dataset.setString(Tag.IssuerOfPatientID, VR.LO,"IDSC_DCMA");
         //------------------------------------------------------------------------------------------
@@ -118,7 +120,7 @@ public class Deidentify {
         cal.add(Calendar.DAY_OF_MONTH, shift);
         return cal.getTime();
     }
-    List<AuxTag> getRetainTagsList(String retainTags, Attributes dataset) {
+    List<AuxTag> getRetainTagsList(String retainTags) {
         if (null == retainTags || retainTags.isEmpty()) {
             return Collections.emptyList();
         }
@@ -130,27 +132,18 @@ public class Deidentify {
             final int tag = ElementDictionary.getStandardElementDictionary().tagForKeyword(name);
             if (tag >=0) { //Valid tag
                 final VR vr = ElementDictionary.getStandardElementDictionary().vrOf(tag);
-                final String val = dataset.getString(tag, null);
-                if (null != val) {
-                    AuxTag auxTag = new AuxTag(tag, val, vr, name);
-                    list.add(auxTag);
-                }
+                AuxTag auxTag = new AuxTag(tag, vr, name);
+                list.add(auxTag);
             }
         });
         return list;
     }
 
-
-    private static class AuxTag{
+    @AllArgsConstructor
+    @Data
+    public static class AuxTag{
         public final int tag;
-        public final String value;
         public final VR vr;
         public final String name;
-        public AuxTag(int tag, String value, VR vr, String name) {
-            this.tag = tag;
-            this.value = value;
-            this.vr = vr;
-            this.name = name;
-        }
     }
 }
