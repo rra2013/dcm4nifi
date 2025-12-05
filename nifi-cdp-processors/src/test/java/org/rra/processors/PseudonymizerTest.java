@@ -272,6 +272,63 @@ public class PseudonymizerTest {
     }
 
     @Test
+    public void retainTagsProcessTestRT() throws Exception {
+
+        //
+        final File dbLocation = new File(DB_LOCATION);
+        dbLocation.delete();
+        final Connection con = ((DBCPService) runner.getControllerService("dbcp")).getConnection();
+        Statement stmt = con.createStatement();
+
+        try {
+            stmt.execute("drop table TEST_PSEUDONYMIZER");
+        } catch (final SQLException ignored) {
+        }
+
+        Map<String,String> retains = new HashMap<>();
+
+
+        stmt.execute("create table TEST_PSEUDONYMIZER (id integer not null, pid varchar(45), prefix varchar(50),postfix varchar(45), date_shift integer not null ,constraint my_pk primary key (id))");
+        stmt.execute("insert into TEST_PSEUDONYMIZER (id, pid, prefix, postfix, date_shift) VALUES (0,'4025765337', 'PRE89898BK', '164' , 0)");
+        stmt.execute("insert into TEST_PSEUDONYMIZER (id, pid, prefix, postfix, date_shift) VALUES (1,'0008722285', 'PRE89898BK', '165' , 0)");
+        stmt.execute("insert into TEST_PSEUDONYMIZER (id, pid, prefix, postfix, date_shift) VALUES (2,'0001900919', 'PRE89898BK', '166' , 0)");
+        runner.setIncomingConnection(true);
+        runner.setProperty(Pseudonymizer.SQL_SELECT_QUERY, "SELECT pid, prefix, postfix FROM TEST_PSEUDONYMIZER where pid=?");
+        runner.setProperty(Pseudonymizer.RETAIN_TAGS, "SOPInstanceUID,FrameOfReferenceUID");
+        //prepare Input
+        rtObjects.forEach(dcmFileArray -> {
+            Attributes dcm = DicomUtils.byteArrayToAttributes(dcmFileArray);
+            // save attribute
+            String frame = dcm.getString(Tag.FrameOfReferenceUID,null);
+            String sop = dcm.getString(Tag.SOPInstanceUID,null);
+            if (null != sop ) {
+                retains.put(sop, frame);
+            }
+            log.info("SOP:Frame : {},{}" ,sop, frame);
+            //
+            HashMap<String, String> attr = new HashMap<>();
+            attr.put("CallingAET", "TEST_RUNNER");
+            runner.enqueue(dcmFileArray, attr);
+            runner.run();
+        });
+        //Assert all are done in success
+        runner.assertAllFlowFilesTransferred(Pseudonymizer.REL_SUCCESS);
+        // Read out put
+        List<MockFlowFile> success = runner.getFlowFilesForRelationship(Pseudonymizer.REL_SUCCESS);
+        AtomicInteger ctrAcc = new AtomicInteger(0);
+        success.forEach(mockFlowFile -> {
+            byte[] readAnonym = mockFlowFile.toByteArray();
+            Attributes dcm = DicomUtils.byteArrayToAttributes(readAnonym);
+            String frame = dcm.getString(Tag.FrameOfReferenceUID);
+            String sop = dcm.getString(Tag.SOPInstanceUID);
+            log.info(">>>>> SOP:Frame : {},{}" ,sop, frame);
+            String frameVerify = retains.get(sop);
+            Assertions.assertEquals(frame, frameVerify);
+        });
+
+    }
+
+    @Test
     public void retainTagsInSeqProcessTest() throws Exception {
 
         //Test with date shift and retain AcquisitionDate and AccessionNumber
