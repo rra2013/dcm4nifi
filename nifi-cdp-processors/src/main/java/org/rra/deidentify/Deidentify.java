@@ -46,7 +46,6 @@ public class Deidentify {
         //Remap Study IUID, Series IUID, SOP IUID and Frame Of Reference UID
         final String studyIUID = dataset.getString(Tag.StudyInstanceUID, null);
         final String seriesIUID = dataset.getString(Tag.SeriesInstanceUID, null);
-        //final String frameOfRefUID = dataset.getString(Tag.FrameOfReferenceUID, null);
         // Save for date shift
         final Date acqDate = dataset.getDate(Tag.AcquisitionDate);
         final Date acqDateTime = dataset.getDate(Tag.AcquisitionDateTime);
@@ -65,12 +64,6 @@ public class Deidentify {
                 dataset.setString(Tag.StudyInstanceUID, VR.UI, studyIUIDRemap);
                 dataset.setString(Tag.SeriesInstanceUID, VR.UI, seriesIUIDRemap);
             }
-//            if (null != frameOfRefUID) {
-//                final String frameOfRefUIDRemap = deidentifier.remapUID(frameOfRefUID);
-//                if (null != frameOfRefUIDRemap)
-//                    dataset.setString(Tag.FrameOfReferenceUID, VR.UI, frameOfRefUIDRemap);
-//            }
-
         }
         //------------------------------------------------------------------------------------------
         // Set date shift if already exists

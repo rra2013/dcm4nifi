@@ -58,9 +58,7 @@ public class SOPClassInfo {
         List<String> list = Arrays.asList(SR_CUIDS);
         return list.contains(this.sopClassUID) && tsOK;
     }
-    /*
 
-     */
     private static final String[] SR_CUIDS = {
             UID.SpectaclePrescriptionReportStorage,
             UID.MacularGridThicknessAndVolumeReportStorage,
