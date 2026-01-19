@@ -89,6 +89,8 @@ public class TestGroovyDICOM {
 
         List<MockFlowFile> success = runner.getFlowFilesForRelationship(ExecuteGroovyScript.REL_SUCCESS);
         log.info("Count of success:{}", success.size());
+        Assertions.assertTrue(success.size() == 4);// 4 objects
+
         runner.assertTransferCount(ExecuteGroovyScript.REL_SUCCESS, success.size());
         success.forEach(mockFlowFile -> {
             byte[] readAnonym = mockFlowFile.toByteArray();
@@ -99,19 +101,16 @@ public class TestGroovyDICOM {
             log.info("pid:{}", pid);
             //
             Sequence rforSeq = ds.getSequence(Tag.ReferencedFrameOfReferenceSequence);
-            if (rforSeq == null || rforSeq.isEmpty()) {
-                throw new IllegalStateException("ReferencedFrameOfReferenceSequence fehlt/leer");
-            }
+            Assertions.assertTrue(rforSeq != null && !rforSeq.isEmpty() );
+
             Attributes rforItem = rforSeq.get(0);
             Sequence rtRefStudySeq = rforItem.getSequence(Tag.RTReferencedStudySequence);
-            if (rtRefStudySeq == null || rtRefStudySeq.isEmpty()) {
-                throw new IllegalStateException("RTReferencedStudySequence fehlt/leer");
-            }
+            Assertions.assertTrue(rtRefStudySeq != null && !rtRefStudySeq.isEmpty());
+
             Attributes rtRefStudyItem = rtRefStudySeq.get(0);
             Sequence rtRefSeriesSeq = rtRefStudyItem.getSequence(Tag.RTReferencedSeriesSequence);
-            if (rtRefSeriesSeq == null || rtRefSeriesSeq.isEmpty()) {
-                throw new IllegalStateException("RTReferencedSeriesSequence fehlt/leer");
-            }
+            Assertions.assertTrue(rtRefSeriesSeq != null && !rtRefSeriesSeq.isEmpty());
+
             Attributes rtRefSeriesItem = rtRefSeriesSeq.get(0);
             // SeriesInstanceUID in der Sequence
             String seriesIUID = rtRefSeriesItem.getString(Tag.SeriesInstanceUID);
