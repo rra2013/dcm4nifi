@@ -122,6 +122,49 @@ public class TestGroovyDICOM {
         log.info("Count of failed:{}", error.size());
     }
 
+    @Test
+    public void test2_modify_dicom_sequence_groovy(){
+        runner.setProperty(ExecuteGroovyScript.ADD_CLASSPATH, LIB_RESOURCE_LOCATION);
+        runner.setProperty(ExecuteGroovyScript.SCRIPT_FILE, TEST_RESOURCE_LOCATION + "modify_RTStructureSetStorage2.groovy");
+        runner.assertValid();
+
+        rtObjects.forEach(bytesArrayDcm -> {
+            runner.enqueue(bytesArrayDcm);
+            runner.run();
+        });
+
+        List<MockFlowFile> success = runner.getFlowFilesForRelationship(ExecuteGroovyScript.REL_SUCCESS);
+        log.info("Count of success:{}", success.size());
+        Assertions.assertTrue(success.size() == 4);// 4 objects
+
+        runner.assertTransferCount(ExecuteGroovyScript.REL_SUCCESS, success.size());
+        success.forEach(mockFlowFile -> {
+            byte[] readAnonym = mockFlowFile.toByteArray();
+            Attributes ds = DicomUtils.byteArrayToAttributes(readAnonym);
+            //
+            Sequence rforSeq = ds.getSequence(Tag.ReferencedFrameOfReferenceSequence);
+            Assertions.assertTrue(rforSeq != null && !rforSeq.isEmpty() );
+
+            Attributes rforItem = rforSeq.get(0);
+            Sequence rtRefStudySeq = rforItem.getSequence(Tag.RTReferencedStudySequence);
+            Assertions.assertTrue(rtRefStudySeq != null && !rtRefStudySeq.isEmpty());
+
+            Attributes rtRefStudyItem = rtRefStudySeq.get(0);
+            Sequence rtRefSeriesSeq = rtRefStudyItem.getSequence(Tag.RTReferencedSeriesSequence);
+            Assertions.assertTrue(rtRefSeriesSeq != null && !rtRefSeriesSeq.isEmpty());
+
+            Attributes rtRefSeriesItem = rtRefSeriesSeq.get(0);
+            // SeriesInstanceUID in der Sequence
+            String seriesIUID = rtRefSeriesItem.getString(Tag.SeriesInstanceUID);
+            log.info("seriesIUID:{}", seriesIUID);
+            // must be equal
+            Assertions.assertTrue(seriesIUID.contains("2.25"));
+        });
+
+        List<MockFlowFile> error = runner.getFlowFilesForRelationship(ExecuteGroovyScript.REL_FAILURE);
+        log.info("Count of failed:{}", error.size());
+    }
+
 
     @BeforeEach
     public void setup() {
