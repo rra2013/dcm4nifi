@@ -9,6 +9,7 @@ import org.dcm4che3.net.pdu.PresentationContext;
 import org.dcm4che3.util.TagUtils;
 
 import java.io.IOException;
+import java.io.InterruptedIOException;
 import java.security.GeneralSecurityException;
 import java.util.concurrent.*;
 
@@ -28,12 +29,18 @@ public class NifiMoveScu extends Device {
     private int priority;
     private String destination;
     private InformationModel model;
-    private int[] inFilter = DEF_IN_FILTER;
+    private final int[] inFilter = DEF_IN_FILTER;
     private Association as;
     private int cancelAfter;
     private boolean releaseEager;
     private ScheduledFuture<?> scheduledCancel;
-    private ScheduledFuture<?> scheduledOnError;
+
+    private static final int CONNECT_TIMEOUT  = 5_000;
+    private static final int REQUEST_TIMEOUT  = 10_000;
+    private static final int RESPONSE_TIMEOUT = 300_000;
+    private static final int ACCEPT_TIMEOUT   = 20_000; //
+    private static final int RELEASE_TIMEOUT  = 5_000;
+    private static final int SEND_TIMEOUT     = 30_000;
 
     public NifiMoveScu(String host, int port, String callingAET, String calledAET, String moveAET) {
         super("movescu");
@@ -51,13 +58,16 @@ public class NifiMoveScu extends Device {
         conn.setMaxOpsInvoked(0);
         conn.setMaxOpsPerformed(0);
         conn.setPackPDV(true);
-        conn.setConnectTimeout(2000);
-        conn.setRequestTimeout(100);
-        conn.setAcceptTimeout(100);
-        conn.setReleaseTimeout(100);
-        conn.setSendTimeout(100);
-        conn.setStoreTimeout(100);
-        conn.setResponseTimeout(100);
+
+        conn.setConnectTimeout(CONNECT_TIMEOUT);
+        conn.setRequestTimeout(REQUEST_TIMEOUT);
+        conn.setResponseTimeout(RESPONSE_TIMEOUT);
+        conn.setAcceptTimeout(ACCEPT_TIMEOUT);
+        conn.setReleaseTimeout(RELEASE_TIMEOUT);
+        conn.setSendTimeout(SEND_TIMEOUT);
+
+        conn.setStoreTimeout(0);
+
         remote.setTlsProtocols(conn.getTlsProtocols());
         remote.setTlsCipherSuites(conn.getTlsCipherSuites());
         //configureServiceClass
@@ -69,19 +79,22 @@ public class NifiMoveScu extends Device {
 
     }
 
-    public void moveSeries(String studyIUID, String seriesIUID) throws Exception {
+    public void moveSeries(String studyIUID, String seriesIUID, IMoveComplete moveComplete, IMoveHasErrors errorHandler) throws Exception {
+        keys.clear();
         addKey(Tag.StudyInstanceUID, studyIUID);
         addKey(Tag.SeriesInstanceUID, seriesIUID);
         addRetrieveLevel("SERIES");
-        runMoveScu();
-    }
-    public void moveStudy(String studyIUID) throws Exception {
-        addKey(Tag.StudyInstanceUID, studyIUID);
-        addRetrieveLevel("STUDY");
-        runMoveScu();
+        runMoveScu(moveComplete, errorHandler);
     }
 
-    private void runMoveScu() throws Exception {
+    public void moveStudy(String studyIUID, IMoveComplete moveComplete, IMoveHasErrors errorHandler) throws Exception {
+        keys.clear();
+        addKey(Tag.StudyInstanceUID, studyIUID);
+        addRetrieveLevel("STUDY");
+        runMoveScu(moveComplete, errorHandler);
+    }
+
+    private void runMoveScu(IMoveComplete moveComplete, IMoveHasErrors errorHandler) throws Exception {
         try {
             ExecutorService executorService = Executors.newSingleThreadExecutor();
             ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
@@ -89,7 +102,7 @@ public class NifiMoveScu extends Device {
             setScheduledExecutor(scheduledExecutorService);
             try {
                 open();
-                retrieve(keys);
+                retrieve(moveComplete, errorHandler);
             } finally {
                 close();
                 executorService.shutdown();
@@ -135,10 +148,6 @@ public class NifiMoveScu extends Device {
         keys.setString(tag, vr, ss);
     }
 
-//    private final void setInputFilter(int[] inFilter) {
-//        this.inFilter = inFilter;
-//    }
-
     private void open() throws IOException, InterruptedException, IncompatibleConnectionException, GeneralSecurityException {
         as = ae.connect(conn, remote, rq);
     }
@@ -155,52 +164,29 @@ public class NifiMoveScu extends Device {
         }
     }
 
-//    private void retrieve(File f) throws IOException, InterruptedException {
-//        Attributes attrs = new Attributes();
-//        DicomInputStream dis = null;
-//        try {
-//            attrs.addSelected(new DicomInputStream(f).readDataset(), inFilter);
-//        } finally {
-//            SafeClose.close(dis);
-//        }
-//        attrs.addAll(keys);
-//        retrieve(attrs);
-//    }
 
-   /* private void retrieve(final MoveComplete moveComplete, final MoveHasErrors erroHandler, final Response responseHandler) throws IOException, InterruptedException {
-        retrieve(this.keys, moveComplete, erroHandler, responseHandler);
+    private void retrieve(final IMoveComplete moveComplete, final IMoveHasErrors erroHandler) throws Exception {
+        retrieve2(keys, moveComplete, erroHandler);
     }
-*/
-    private final class MoveDimseRSPHandler extends DimseRSPHandler {
-        public MoveDimseRSPHandler(int msgId) {
-            super(msgId);
-        }
 
-        @Override
-        public void onDimseRSP(Association as, Attributes cmd, Attributes data) {
-            super.onDimseRSP(as, cmd, data);
-            int status = cmd.getInt(Tag.Status, -1);
-            if (!Status.isPending(status) && (status != Status.Success)) {
-                log.debug("##################### cmd = {}", cmd);
-                log.info("C-Move has Errors. (status={})", TagUtils.toHexString(status));
-            }else if (status == Status.Success){
-                log.info("C-Move Complete.");
-            }
-        }
-    }
-    
-    private void retrieve(Attributes keys) throws IOException, InterruptedException {
-        /*final DimseRSPHandler rspHandler = new DimseRSPHandler(as.nextMessageID()) {
+    private void retrieve2(Attributes keys,
+                           final IMoveComplete moveComplete,
+                           final IMoveHasErrors errorHandler) throws Exception {
+
+        final CountDownLatch done = new CountDownLatch(1);
+        MoveDimseRSPHandler rspHandler = new MoveDimseRSPHandler(as.nextMessageID(), errorHandler, moveComplete) {
             @Override
             public void onDimseRSP(Association as, Attributes cmd, Attributes data) {
                 super.onDimseRSP(as, cmd, data);
+                int status = cmd.getInt(Tag.Status, -1);
+
+                // Nur bei finaler Antwort freigeben
+                if (!Status.isPending(status)) {
+                    done.countDown();
+                }
             }
         };
-        */
-        MoveDimseRSPHandler rspHandler = new MoveDimseRSPHandler(as.nextMessageID());
-
         as.cmove(model.cuid, priority, keys, null, destination, rspHandler);
-
         if (cancelAfter > 0) {
             scheduledCancel = schedule(() -> {
                 try {
@@ -213,9 +199,21 @@ public class NifiMoveScu extends Device {
                 }
             }, cancelAfter, TimeUnit.MILLISECONDS);
         }
+        // WICHTIG: auf final warten (LAN: z.B. 10 min)
+        boolean finished = done.await(10, TimeUnit.MINUTES);
+        if (!finished) {
+            try {
+                rspHandler.cancel(as);
+            } catch (Exception ignore) {
+            }
+            if (errorHandler != null) {
+                errorHandler.moveHasError(Status.ProcessingFailure, "C-MOVE timed out (app deadline)");
+            }
+            throw new InterruptedIOException("C-MOVE timed out (app deadline)");
+        }
     }
 
-    private enum InformationModel {
+     private enum InformationModel {
         PatientRoot(UID.PatientRootQueryRetrieveInformationModelMove, "STUDY"),
         StudyRoot(UID.StudyRootQueryRetrieveInformationModelMove, "STUDY"),
         PatientStudyOnly(UID.PatientStudyOnlyQueryRetrieveInformationModelMove, "STUDY"),
@@ -231,4 +229,34 @@ public class NifiMoveScu extends Device {
             this.level = level;
         }
     }
+
+    private class MoveDimseRSPHandler extends DimseRSPHandler {
+        final IMoveHasErrors errorHandler;
+        final IMoveComplete moveComplete;
+        public MoveDimseRSPHandler(int msgId, IMoveHasErrors erroHandler, IMoveComplete moveComplete) {
+            super(msgId);
+            this.errorHandler = erroHandler;
+            this.moveComplete = moveComplete;
+        }
+
+        @Override
+        public void onDimseRSP(Association as, Attributes cmd, Attributes data) {
+            super.onDimseRSP(as, cmd, data);
+            int status = cmd.getInt(Tag.Status, -1);
+            if (!Status.isPending(status) && (status != Status.Success)) {
+                log.error("C-Move has Errors. (status={})", TagUtils.toHexString(status));
+                if (null != errorHandler){
+                    try {
+                        errorHandler.moveHasError(status, "C-Move has Errors. (status="+ TagUtils.toHexString(status)+ ")");
+                    } catch (Exception e) {
+                        e.printStackTrace();
+
+                    }
+                }
+            }else if (status == Status.Success){
+                moveComplete.moveComplete(keys.getString(Tag.StudyInstanceUID), keys.getString(Tag.SeriesInstanceUID));
+            }
+        }
+    }
+
 }

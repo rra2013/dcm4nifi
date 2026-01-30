@@ -54,12 +54,14 @@ public class MoveScuTest {
             try(BufferedOutputStream bos = new BufferedOutputStream(byteArrayOutputStream)){
                 copyAttributesToOutput(input, bos);
                 testRunner.enqueue(byteArrayOutputStream.toByteArray());
-                testRunner.run();
+                testRunner.run(1,true,true);
                 List<MockFlowFile> success = testRunner.getFlowFilesForRelationship(REL_SUCCESS);
                 List<MockFlowFile> failed = testRunner.getFlowFilesForRelationship(REL_FAILURE);
                 log.info("Size of Success: {}", success.size());
                 log.info("Size of failed: {}", failed.size());
+
                 testRunner.assertAllFlowFilesTransferred(REL_SUCCESS, 1);
+
             }
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -73,12 +75,12 @@ public class MoveScuTest {
         String seriesInstanceUID = "1.3.12.2.1107.5.2.19.45819.2016071811073146270262179.0.0.0";//9 instances
         seriesInstanceUID = "1.3.12.2.1107.5.2.19.45819.2016071811281418616865059.0.0.0";//25 instances
 
-        nifiMoveSCU.moveSeries(studyInstanceUID, seriesInstanceUID);
+        nifiMoveSCU.moveSeries(studyInstanceUID, seriesInstanceUID, (studyIUID, seriesIUID) -> {}, (staus, message) -> {});
     }
     //@Test
     public void testSCUMoveStudy() throws Exception {
         NifiMoveScu nifiMoveSCU = new NifiMoveScu(DICOM_SERVER_HOST, DICOM_SERVER_PORT, "MOVE_SCU", DICOM_SERVER_AET, DICOM_SERVER_MOVE_AET);
         String studyInstanceUID = "1.2.840.113845.11.1000000001900555490.20160718102042.2434233";
-        nifiMoveSCU.moveStudy(studyInstanceUID);
+        nifiMoveSCU.moveStudy(studyInstanceUID, (studyIUID, seriesIUID) -> {}, (staus, message) -> {});
     }
 }
