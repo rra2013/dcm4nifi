@@ -1,6 +1,5 @@
 package org.rra.processors;
 
-import lombok.extern.slf4j.Slf4j;
 import org.apache.nifi.annotation.behavior.InputRequirement;
 import org.apache.nifi.annotation.behavior.SideEffectFree;
 import org.apache.nifi.annotation.behavior.SupportsBatching;
@@ -108,6 +107,22 @@ public class GetScu extends AbstractProcessor {
 
     private Set<Relationship> relationships;
 
+    private static String readStudyIUID(Attributes data) throws Exception {
+        String uid = data.getString(Tag.StudyInstanceUID, null);
+        if (null == uid) {
+            throw new Exception("StudyInstanceUID is null");
+        }
+        return uid;
+    }
+
+    private static String readSeriesIUID(Attributes data) throws Exception {
+        String uid = data.getString(Tag.SeriesInstanceUID, null);
+        if (null == uid) {
+            throw new Exception("SeriesInstanceUID is null");
+        }
+        return uid;
+    }
+
     @Override
     protected void init(final ProcessorInitializationContext context) {
         descriptors = List.of(REMOTE_HOST, PORT, CALLED_AET, CALLING_AET, GET_LEVEL);
@@ -149,7 +164,7 @@ public class GetScu extends AbstractProcessor {
         try {
             final long t1 = System.nanoTime();
             session.remove(flowFile);
-            session.commitAsync( () ->{
+            session.commitAsync(() -> {
                 log.debug("Commit after remove() OK.");
             }, (t) -> {
                 log.error("Failed to clean up DICOM C-Get process", t);
@@ -170,9 +185,9 @@ public class GetScu extends AbstractProcessor {
             final String details = "Retrieve_AET:" + called_aet + " Status:" + TagUtils.shortToHexString(0);
             log.info(details);
             FlowFile newFlowfile = session.create();
-            try(OutputStream out = session.write(newFlowfile)){
-                try(BufferedOutputStream bos = new BufferedOutputStream(out)){
-                    if (null != request){
+            try (OutputStream out = session.write(newFlowfile)) {
+                try (BufferedOutputStream bos = new BufferedOutputStream(out)) {
+                    if (null != request) {
                         DicomUtils.copyAttributesToOutput(request, bos);
                     }
                 }
@@ -195,9 +210,9 @@ public class GetScu extends AbstractProcessor {
         }
         if (hasError.get()) {
             FlowFile newFlowfile = session.create();
-            try(OutputStream out = session.write(newFlowfile)){
-                try(BufferedOutputStream bos = new BufferedOutputStream(out)){
-                    if (null != request){
+            try (OutputStream out = session.write(newFlowfile)) {
+                try (BufferedOutputStream bos = new BufferedOutputStream(out)) {
+                    if (null != request) {
                         DicomUtils.copyAttributesToOutput(request, bos);
                     }
                 }
@@ -216,31 +231,14 @@ public class GetScu extends AbstractProcessor {
         }
     }
 
-
-
-    private static String readStudyIUID(Attributes data) throws Exception {
-        String uid = data.getString(Tag.StudyInstanceUID, null);
-        if (null == uid) {
-            throw new Exception("StudyInstanceUID is null");
-        }
-        return uid;
-    }
-
-    private static String readSeriesIUID(Attributes data) throws Exception {
-        String uid = data.getString(Tag.SeriesInstanceUID, null);
-        if (null == uid) {
-            throw new Exception("SeriesInstanceUID is null");
-        }
-        return uid;
-    }
-
     @OnScheduled
     protected void start(final ProcessContext context) {
         final ComponentLog log = getLogger();
         log.info("+ + + Start {} OK. + + +", getClass().getSimpleName());
     }
+
     @OnStopped
-    public void stop(){
+    public void stop() {
         final ComponentLog log = getLogger();
         log.info("+ + + Stop {} OK. + + +", getClass().getSimpleName());
     }

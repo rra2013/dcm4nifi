@@ -1,6 +1,5 @@
 package org.rra.processors;
 
-import lombok.extern.slf4j.Slf4j;
 import org.apache.nifi.annotation.behavior.*;
 import org.apache.nifi.annotation.documentation.CapabilityDescription;
 import org.apache.nifi.annotation.documentation.Tags;
@@ -9,6 +8,7 @@ import org.apache.nifi.annotation.lifecycle.OnScheduled;
 import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.expression.ExpressionLanguageScope;
 import org.apache.nifi.flowfile.FlowFile;
+import org.apache.nifi.logging.ComponentLog;
 import org.apache.nifi.processor.*;
 import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.util.StandardValidators;
@@ -23,14 +23,14 @@ import java.util.Set;
 @InputRequirement(InputRequirement.Requirement.INPUT_REQUIRED)
 @SideEffectFree
 @SystemResourceConsideration(resource = SystemResource.CPU)
-@Slf4j
-@Tags({"DICOM","Store-SCU","CDP"})
+
+@Tags({"DICOM", "Store-SCU", "CDP"})
 @CapabilityDescription("DICOM Store-SCU. Store a Flow File with DICOM body to remote destination.")
 @UseCase(description = "DICOM Store-SCU can be used for Sending DICOM Data to remote SCP",
         inputRequirement = InputRequirement.Requirement.INPUT_REQUIRED)
 
-@WritesAttributes({@WritesAttribute(attribute="", description="")})
-@ReadsAttributes({@ReadsAttribute(attribute="", description="")})
+@WritesAttributes({@WritesAttribute(attribute = "", description = "")})
+@ReadsAttributes({@ReadsAttribute(attribute = "", description = "")})
 public class StoreScu extends AbstractProcessor {
 
     public static final PropertyDescriptor REMOTE_HOST = new PropertyDescriptor.Builder()
@@ -88,11 +88,12 @@ public class StoreScu extends AbstractProcessor {
     @Override
     protected void init(final ProcessorInitializationContext context) {
         descriptors = List.of(REMOTE_HOST, PORT, CALLED_AET, CALLING_AET);
-        relationships = Set.of(REL_SUCCESS,REL_FAILURE);
+        relationships = Set.of(REL_SUCCESS, REL_FAILURE);
     }
 
     @OnScheduled
     public void start(final ProcessContext context) {
+        final ComponentLog log = getLogger();
         log.info("+ + + Start {} OK. + + +", getClass().getSimpleName());
     }
 
@@ -102,6 +103,7 @@ public class StoreScu extends AbstractProcessor {
         if (flowFile == null) {
             return;
         }
+        final ComponentLog log = getLogger();
         log.info("+ + + On Data from AET: {} + + +", flowFile.getAttribute("CallingAET"));
         String called_aet = context.getProperty(CALLED_AET).evaluateAttributeExpressions().getValue();
         String calling_aet = context.getProperty(CALLING_AET).evaluateAttributeExpressions().getValue();

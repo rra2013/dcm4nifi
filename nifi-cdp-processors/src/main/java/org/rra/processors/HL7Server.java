@@ -1,6 +1,5 @@
 package org.rra.processors;
 
-import lombok.extern.slf4j.Slf4j;
 import org.apache.nifi.annotation.behavior.WritesAttribute;
 import org.apache.nifi.annotation.behavior.WritesAttributes;
 import org.apache.nifi.annotation.documentation.CapabilityDescription;
@@ -10,26 +9,25 @@ import org.apache.nifi.annotation.lifecycle.OnScheduled;
 import org.apache.nifi.annotation.lifecycle.OnStopped;
 import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.expression.ExpressionLanguageScope;
+import org.apache.nifi.logging.ComponentLog;
 import org.apache.nifi.processor.*;
 import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.util.StandardValidators;
-import org.rra.hl7.NifiHL7HapiServer;
 import org.rra.hl7.IHL7Server;
+import org.rra.hl7.NifiHL7HapiServer;
 
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 
-@Slf4j
-@Tags({"HL7","server","MLLP", "CDP"})
+
+@Tags({"HL7", "server", "MLLP", "CDP"})
 @CapabilityDescription("A HL7 MLLP server based on hapi")
 @UseCase(description = "Receives HL7 Objects via TCP/IP and MLLP. Listening on port and bind to IP address. ")
-@WritesAttributes({@WritesAttribute(attribute="", description="")})
+@WritesAttributes({@WritesAttribute(attribute = "", description = "")})
 public class HL7Server extends AbstractSessionFactoryProcessor {
 
-    private final AtomicReference<ProcessSessionFactory> sessionFactory = new AtomicReference<>();
-    private volatile CountDownLatch sessionFactorySetSignal;
     public static final PropertyDescriptor PORT = new PropertyDescriptor.Builder()
             .name("listening-port")
             .displayName("Listening Port")
@@ -61,7 +59,8 @@ public class HL7Server extends AbstractSessionFactoryProcessor {
             .name("success")
             .description("Receive HL7 success")
             .build();
-
+    private final AtomicReference<ProcessSessionFactory> sessionFactory = new AtomicReference<>();
+    private volatile CountDownLatch sessionFactorySetSignal;
     private List<PropertyDescriptor> descriptors;
 
     private Set<Relationship> relationships;
@@ -73,8 +72,10 @@ public class HL7Server extends AbstractSessionFactoryProcessor {
         descriptors = List.of(PORT, MESSAGE_TYPE, TRIGGER_EVENT);
         relationships = Set.of(REL_SUCCESS);
     }
+
     @OnScheduled
     public void startHL7Server(final ProcessContext context) {
+        final ComponentLog log = getLogger();
         if (null == server) {
             sessionFactory.set(null);
             int port = context.getProperty(PORT).evaluateAttributeExpressions().asInteger();
@@ -89,17 +90,20 @@ public class HL7Server extends AbstractSessionFactoryProcessor {
                 stopHL7Server();
                 throw processException;
             }
-        }else{
+        } else {
             log.info("Server is all ready started");
         }
     }
+
     @OnStopped
-    public void stopHL7Server(){
+    public void stopHL7Server() {
+        final ComponentLog log = getLogger();
         log.info("+ + + Stop the HL7 Server + + + ");
         if (null != server) server.stopServer();
         server = null;
         sessionFactory.set(null);
     }
+
     @Override
     public void onTrigger(ProcessContext context, ProcessSessionFactory sessionFactory) throws ProcessException {
         if (this.sessionFactory.compareAndSet(null, sessionFactory)) {
@@ -107,6 +111,7 @@ public class HL7Server extends AbstractSessionFactoryProcessor {
         }
         context.yield();
     }
+
     @Override
     public Set<Relationship> getRelationships() {
         return this.relationships;

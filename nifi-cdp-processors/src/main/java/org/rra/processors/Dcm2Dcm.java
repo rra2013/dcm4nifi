@@ -1,6 +1,5 @@
 package org.rra.processors;
 
-import lombok.extern.slf4j.Slf4j;
 import org.apache.nifi.annotation.behavior.InputRequirement;
 import org.apache.nifi.annotation.behavior.SideEffectFree;
 import org.apache.nifi.annotation.behavior.SystemResource;
@@ -12,6 +11,7 @@ import org.apache.nifi.annotation.lifecycle.OnScheduled;
 import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.components.Validator;
 import org.apache.nifi.flowfile.FlowFile;
+import org.apache.nifi.logging.ComponentLog;
 import org.apache.nifi.processor.*;
 import org.apache.nifi.processor.exception.ProcessException;
 import org.dcm4che3.data.UID;
@@ -31,18 +31,18 @@ import java.util.concurrent.TimeUnit;
  * j2ki=compress JPEG 2000 Lossy; equivalent to -t 1.2.840.10008.1.2.4.91
  * defl=transcode sources to Deflated Explicit VR Little Endian; equivalent to
  * default=transcode ImplicitVRLittleEndian -t 1.2.840.10008.1.2
- *
+ * <p>
  * -N <near-lossless>           Near-Lossless parameter of JPEG LS Lossy
- *                               compression
- *  -q <quality>                 compression quality (0.0-1.0) of JPEG Lossy
- *                               compression
- *  -Q <compression>             compression factor (5-100) of JPEG 2000
- *                               Lossy compression
+ * compression
+ * -q <quality>                 compression quality (0.0-1.0) of JPEG Lossy
+ * compression
+ * -Q <compression>             compression factor (5-100) of JPEG 2000
+ * Lossy compression
  */
 @InputRequirement(InputRequirement.Requirement.INPUT_REQUIRED)
 @SideEffectFree
 @SystemResourceConsideration(resource = SystemResource.CPU)
-@Slf4j
+
 @Tags({"DICOM", "Dcm2Dcm", "CDP"})
 @CapabilityDescription("Transcode one DICOM Object according the specified Transfer Syntax")
 @UseCase(description = "Compress or Uncompress DICOM Objects.",
@@ -64,7 +64,7 @@ public class Dcm2Dcm extends AbstractProcessor {
             .displayName("Transfer Syntax")
             .description("The Transfer Syntax")
             .required(true)
-            .allowableValues(IVRLE,EVRLE, JPEG, JPLL, JPLSL,JPLSN,JP2KR, JP2KI, DEFL)
+            .allowableValues(IVRLE, EVRLE, JPEG, JPLL, JPLSL, JPLSN, JP2KR, JP2KI, DEFL)
             .defaultValue(IVRLE)
             .addValidator(Validator.VALID)
             .build();
@@ -80,31 +80,49 @@ public class Dcm2Dcm extends AbstractProcessor {
 
     private List<PropertyDescriptor> descriptors;
     private Set<Relationship> relationships;
+
+    private static String transferSyntaxOf(String ts) {
+        return ts.equals(IVRLE) ? UID.ImplicitVRLittleEndian
+                : ts.equals(EVRLE) ? UID.ExplicitVRLittleEndian
+                : ts.equals(DEFL) ? UID.DeflatedExplicitVRLittleEndian
+                : ts.equals(JPEG) ? UID.JPEGBaseline8Bit
+                : ts.equals(JPLL) ? UID.JPEGLosslessSV1
+                : ts.equals(JPLSL) ? UID.JPEGLSLossless
+                : ts.equals(JPLSN) ? UID.JPEGLSNearLossless
+                : ts.equals(JP2KR) ? UID.JPEG2000Lossless
+                : ts.equals(JP2KI) ? UID.JPEG2000
+                : UID.ImplicitVRLittleEndian;
+    }
+
     @Override
     protected void init(final ProcessorInitializationContext context) {
         descriptors = List.of(TRANSFER_SYNTAX);
         relationships = Set.of(REL_SUCCESS, REL_FAILURE);
     }
+
     @OnScheduled
     protected void start(final ProcessContext context) {
+        final ComponentLog log = getLogger();
         log.info("+ + + Start {} OK. + + +", getClass().getSimpleName());
     }
+
     @Override
     public void onTrigger(ProcessContext context, ProcessSession session) throws ProcessException {
         FlowFile flowFile = session.get();
         if (flowFile == null) {
             return;
         }
+        final ComponentLog log = getLogger();
         final String ts_orig = flowFile.getAttribute("TransferSyntax");
         final String ts_option = context.getProperty(TRANSFER_SYNTAX).getValue();
         final String transferSyntax = transferSyntaxOf(ts_option);
-        try{
+        try {
             final long t1 = System.nanoTime();
-            flowFile = session.write(flowFile,(in, out) -> {
+            flowFile = session.write(flowFile, (in, out) -> {
                 try (OutputStream buffOut = new BufferedOutputStream(out)) {
-                    try(InputStream buffIn = new BufferedInputStream(in)){
+                    try (InputStream buffIn = new BufferedInputStream(in)) {
                         Dicom2DicomTranscoder.transcode(buffIn, buffOut, transferSyntax);
-                    }catch (Exception exception) {
+                    } catch (Exception exception) {
                         throw new IOException(exception);
                     }
                 } catch (Exception exception) {
@@ -122,18 +140,7 @@ public class Dcm2Dcm extends AbstractProcessor {
             session.transfer(flowFile, REL_FAILURE);
         }
     }
-    private static String transferSyntaxOf( String ts) {
-        return ts.equals(IVRLE) ? UID.ImplicitVRLittleEndian
-                : ts.equals(EVRLE) ? UID.ExplicitVRLittleEndian
-                : ts.equals(DEFL) ? UID.DeflatedExplicitVRLittleEndian
-                : ts.equals(JPEG) ? UID.JPEGBaseline8Bit
-                : ts.equals(JPLL) ? UID.JPEGLosslessSV1
-                : ts.equals(JPLSL) ? UID.JPEGLSLossless
-                : ts.equals(JPLSN) ? UID.JPEGLSNearLossless
-                : ts.equals(JP2KR) ? UID.JPEG2000Lossless
-                : ts.equals(JP2KI) ? UID.JPEG2000
-                : UID.ImplicitVRLittleEndian;
-    }
+
     @Override
     public Set<Relationship> getRelationships() {
         return this.relationships;

@@ -1,6 +1,5 @@
 package org.rra.processors;
 
-import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.IOUtils;
 import org.apache.nifi.annotation.behavior.InputRequirement;
 import org.apache.nifi.annotation.behavior.SideEffectFree;
@@ -108,7 +107,6 @@ public class FindScu extends AbstractProcessor {
     private Set<Relationship> relationships;
 
 
-
     @Override
     protected void init(final ProcessorInitializationContext context) {
         descriptors = List.of(REMOTE_HOST, PORT, CALLED_AET, CALLING_AET, QUERY_LEVEL);
@@ -142,10 +140,10 @@ public class FindScu extends AbstractProcessor {
             return;
         }
         String[] split = input.split(",");
-        if (split.length>0){
+        if (split.length > 0) {
             studyIUID = split[0].trim();
         }
-        if (split.length>1){
+        if (split.length > 1) {
             seriesIUID = split[1].trim();
         }
         String called_aet = context.getProperty(CALLED_AET).evaluateAttributeExpressions().getValue();
@@ -171,7 +169,7 @@ public class FindScu extends AbstractProcessor {
             }
 
             if (null == studyIUID && null == seriesIUID) {
-                log.info("# # # No Values for the series Level is set # # # studyIUID {}, seriesIUID {}",studyIUID,seriesIUID);
+                log.info("# # # No Values for the series Level is set # # # studyIUID {}, seriesIUID {}", studyIUID, seriesIUID);
                 log.error("# # # No Values for the series Level is set # # #");
                 session.transfer(flowFile, REL_FAILURE);
                 return;
@@ -189,7 +187,7 @@ public class FindScu extends AbstractProcessor {
         try {
             findSCU.doQuery(remote -> {
                 session.remove(flowFile);
-            },attributes -> {
+            }, attributes -> {
                 try {
                     final long t1 = System.nanoTime();
                     FlowFile qResItem = session.create();

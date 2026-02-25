@@ -1,6 +1,5 @@
 package org.rra.processors;
 
-import lombok.extern.slf4j.Slf4j;
 import org.apache.nifi.annotation.behavior.InputRequirement;
 import org.apache.nifi.annotation.behavior.SideEffectFree;
 import org.apache.nifi.annotation.behavior.SupportsBatching;
@@ -11,6 +10,7 @@ import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.components.ValidationContext;
 import org.apache.nifi.components.ValidationResult;
 import org.apache.nifi.flowfile.FlowFile;
+import org.apache.nifi.logging.ComponentLog;
 import org.apache.nifi.processor.*;
 import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.util.StandardValidators;
@@ -27,7 +27,7 @@ import java.util.Set;
 
 import static org.rra.dcm.DicomUtils.readDicomObjectUntilPixelData;
 
-@Slf4j
+
 @SupportsBatching
 @InputRequirement(InputRequirement.Requirement.INPUT_REQUIRED)
 @SideEffectFree
@@ -96,6 +96,7 @@ public class SOPClassFilter extends AbstractProcessor {
         if (flowFile == null) {
             return;
         }
+        final ComponentLog log = getLogger();
         Attributes attr = null;
         try (InputStream read = session.read(flowFile)) {
             attr = readDicomObjectUntilPixelData(read);
@@ -107,13 +108,12 @@ public class SOPClassFilter extends AbstractProcessor {
         }
 
 
-        if (context.getProperty(OBJECT_TYPE).isSet()){
+        if (context.getProperty(OBJECT_TYPE).isSet()) {
             String selectedType = context.getProperty(OBJECT_TYPE).evaluateAttributeExpressions().getValue();
-            if (selectedType.equals(ALL)){
+            if (selectedType.equals(ALL)) {
                 session.getProvenanceReporter().route(flowFile, REL_SUCCESS);
                 session.transfer(flowFile, REL_SUCCESS);
-            }
-            else if (selectedType.equals(VALUE)){
+            } else if (selectedType.equals(VALUE)) {
                 if (context.getProperty(FILTER_SOP_CLASS).isSet()) {
                     String filterSopIuid = context.getProperty(FILTER_SOP_CLASS).evaluateAttributeExpressions(flowFile).getValue();
                     if (filterSopIuid.equals("*")) {
@@ -129,23 +129,23 @@ public class SOPClassFilter extends AbstractProcessor {
                             session.transfer(flowFile, REL_FAILURE);
                         }
                     }
-                }else{
+                } else {
                     session.getProvenanceReporter().route(flowFile, REL_FAILURE);
                     session.transfer(flowFile, REL_FAILURE);
                 }
-            }else {
+            } else {
                 String tsuid = flowFile.getAttribute("TransferSyntax");
                 SOPClassInfo sop = new SOPClassInfo(attr, tsuid);
                 String typeOfObject = DcmObjectType.objectTypeOf(sop).toString();
                 if (selectedType.equals(typeOfObject)) {
                     session.getProvenanceReporter().route(flowFile, REL_SUCCESS);
                     session.transfer(flowFile, REL_SUCCESS);
-                }else{
+                } else {
                     session.getProvenanceReporter().route(flowFile, REL_FAILURE);
                     session.transfer(flowFile, REL_FAILURE);
                 }
             }
-        }else{
+        } else {
             session.getProvenanceReporter().route(flowFile, REL_FAILURE);
             session.transfer(flowFile, REL_FAILURE);
         }

@@ -1,6 +1,5 @@
 package org.rra.processors;
 
-import lombok.extern.slf4j.Slf4j;
 import org.apache.nifi.annotation.behavior.InputRequirement;
 import org.apache.nifi.annotation.behavior.SideEffectFree;
 import org.apache.nifi.annotation.behavior.SupportsBatching;
@@ -10,7 +9,6 @@ import org.apache.nifi.annotation.documentation.UseCase;
 import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.components.ValidationContext;
 import org.apache.nifi.components.ValidationResult;
-import org.apache.nifi.expression.ExpressionLanguageScope;
 import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.processor.*;
 import org.apache.nifi.processor.exception.ProcessException;
@@ -21,7 +19,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 
-@Slf4j
+
 @SupportsBatching
 @InputRequirement(InputRequirement.Requirement.INPUT_REQUIRED)
 @SideEffectFree
@@ -74,6 +72,7 @@ public class DICOMRelais extends AbstractProcessor {
             session.transfer(flowFile, REL_FAILURE);
         }
     }
+
     @Override
     protected void init(final ProcessorInitializationContext context) {
         descriptors = List.of(ROUTE_AET);
@@ -104,6 +103,7 @@ public class DICOMRelais extends AbstractProcessor {
             validationResults.add(createValidationResult(ROUTE_AET.getDisplayName(), explanation));
         }
     }
+
     private ValidationResult createValidationResult(String subject, String explanation) {
         return new ValidationResult.Builder().subject(subject).valid(false).explanation(explanation).build();
     }

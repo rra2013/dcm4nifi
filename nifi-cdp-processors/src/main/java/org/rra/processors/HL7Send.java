@@ -2,7 +2,6 @@ package org.rra.processors;
 
 import ca.uhn.hl7v2.HL7Exception;
 import ca.uhn.hl7v2.llp.LLPException;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.IOUtils;
 import org.apache.nifi.annotation.behavior.InputRequirement;
 import org.apache.nifi.annotation.behavior.SideEffectFree;
@@ -15,25 +14,23 @@ import org.apache.nifi.annotation.lifecycle.OnScheduled;
 import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.expression.ExpressionLanguageScope;
 import org.apache.nifi.flowfile.FlowFile;
+import org.apache.nifi.logging.ComponentLog;
 import org.apache.nifi.processor.*;
 import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.util.StandardValidators;
-import org.rra.cstore.NifiStoreSCU;
 import org.rra.hl7.HL7Sender;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
 @InputRequirement(InputRequirement.Requirement.INPUT_REQUIRED)
 @SideEffectFree
 @SystemResourceConsideration(resource = SystemResource.CPU)
-@Slf4j
+
 @Tags({"HL7", "HL7Send", "CDP"})
 @CapabilityDescription("Transform a HL7 MLLP Message to remote destination.")
 @UseCase(description = "Send HL7 Messages",
@@ -64,7 +61,7 @@ public class HL7Send extends AbstractProcessor {
             .description("Transform success")
             .build();
 
-    public static final Relationship REL_ACKNOWLEDGE  = new Relationship.Builder()
+    public static final Relationship REL_ACKNOWLEDGE = new Relationship.Builder()
             .name("acknowledge")
             .description("Transform acknowledgment")
             .build();
@@ -126,6 +123,7 @@ public class HL7Send extends AbstractProcessor {
 
     @OnScheduled
     public void start(final ProcessContext context) {
+        final ComponentLog log = getLogger();
         log.info("+ + + Start {} OK. + + +", getClass().getSimpleName());
         remoteHost = context.getProperty(REMOTE_HOST).evaluateAttributeExpressions().getValue();
         port = context.getProperty(PORT).evaluateAttributeExpressions().asInteger();

@@ -1,6 +1,5 @@
 package org.rra.processors;
 
-import lombok.extern.slf4j.Slf4j;
 import org.apache.nifi.annotation.behavior.InputRequirement;
 import org.apache.nifi.annotation.behavior.SideEffectFree;
 import org.apache.nifi.annotation.behavior.SupportsBatching;
@@ -10,6 +9,7 @@ import org.apache.nifi.annotation.documentation.UseCase;
 import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.flowfile.attributes.CoreAttributes;
+import org.apache.nifi.logging.ComponentLog;
 import org.apache.nifi.processor.*;
 import org.apache.nifi.processor.exception.ProcessException;
 import org.rra.hl7.HL7Transformer;
@@ -21,7 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
-@Slf4j
+
 @SupportsBatching
 @InputRequirement(InputRequirement.Requirement.INPUT_REQUIRED)
 @SideEffectFree
@@ -42,11 +42,13 @@ public class Xml2HL7 extends AbstractProcessor {
 
     private Set<Relationship> relationships;
     private List<PropertyDescriptor> descriptors;
+
     @Override
     protected void init(final ProcessorInitializationContext context) {
         relationships = Set.of(REL_SUCCESS, REL_FAILURE);
         descriptors = new ArrayList<>();
     }
+
     @Override
     public Set<Relationship> getRelationships() {
         return this.relationships;
@@ -63,6 +65,7 @@ public class Xml2HL7 extends AbstractProcessor {
         if (flowFile == null) {
             return;
         }
+        final ComponentLog log = getLogger();
         try {
             flowFile = session.write(flowFile, (in, out) -> {
                 try (OutputStream buffOut = new BufferedOutputStream(out)) {

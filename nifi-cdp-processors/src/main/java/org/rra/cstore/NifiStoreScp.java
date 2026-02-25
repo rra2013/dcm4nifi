@@ -218,7 +218,7 @@ public class NifiStoreScp {
 
                 processSession.commitAsync(() -> {
                     // if data transfer ok - send transfer complete message
-                    log.info("# # # Process Complete # # #");
+                    log.info("# # # C-Store Process Complete # # #");
                 });
 
             } catch (Exception e) {

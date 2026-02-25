@@ -1,6 +1,5 @@
 package org.rra.processors;
 
-import lombok.extern.slf4j.Slf4j;
 import org.apache.nifi.annotation.behavior.InputRequirement;
 import org.apache.nifi.annotation.behavior.SideEffectFree;
 import org.apache.nifi.annotation.behavior.SupportsBatching;
@@ -21,7 +20,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 
-@Slf4j
+
 @SupportsBatching
 @InputRequirement(InputRequirement.Requirement.INPUT_REQUIRED)
 @SideEffectFree
@@ -83,23 +82,23 @@ public class TransfersyntaxFilter extends AbstractProcessor {
 
         if (context.getProperty(OBJECT_TYPE).isSet()) {
             String selectedType = context.getProperty(OBJECT_TYPE).evaluateAttributeExpressions().getValue();
-            if (selectedType.equals(UNCOMPRESSED)){
-                if (TransfersyntaxInfo.isUncompressed(tsUID)){
+            if (selectedType.equals(UNCOMPRESSED)) {
+                if (TransfersyntaxInfo.isUncompressed(tsUID)) {
                     session.getProvenanceReporter().route(flowFile, REL_SUCCESS);
                     session.transfer(flowFile, REL_SUCCESS);
-                }else{
+                } else {
                     session.getProvenanceReporter().route(flowFile, REL_FAILURE);
                     session.transfer(flowFile, REL_FAILURE);
                 }
-            }else if (selectedType.equals(VALUE)){
+            } else if (selectedType.equals(VALUE)) {
                 if (context.getProperty(TRANSFER_SYNTAX).isSet()) {
                     String filterTSyntax = context.getProperty(TRANSFER_SYNTAX).evaluateAttributeExpressions(flowFile).getValue();
-                    if (filterTSyntax.equals("*")){
+                    if (filterTSyntax.equals("*")) {
                         session.getProvenanceReporter().route(flowFile, REL_SUCCESS);
                         session.transfer(flowFile, REL_SUCCESS);
-                    }else{
+                    } else {
                         String transferSyntax = flowFile.getAttribute("TransferSyntax");
-                        if (transferSyntax.equalsIgnoreCase(filterTSyntax)){
+                        if (transferSyntax.equalsIgnoreCase(filterTSyntax)) {
                             session.getProvenanceReporter().route(flowFile, REL_SUCCESS);
                             session.transfer(flowFile, REL_SUCCESS);
                         } else {
@@ -107,12 +106,12 @@ public class TransfersyntaxFilter extends AbstractProcessor {
                             session.transfer(flowFile, REL_FAILURE);
                         }
                     }
-                }else{
+                } else {
                     session.getProvenanceReporter().route(flowFile, REL_FAILURE);
                     session.transfer(flowFile, REL_FAILURE);
                 }
             }
-        }else{
+        } else {
             session.getProvenanceReporter().route(flowFile, REL_FAILURE);
             session.transfer(flowFile, REL_FAILURE);
         }
@@ -148,6 +147,7 @@ public class TransfersyntaxFilter extends AbstractProcessor {
             validationResults.add(createValidationResult(TRANSFER_SYNTAX.getDisplayName(), explanation));
         }
     }
+
     private ValidationResult createValidationResult(String subject, String explanation) {
         return new ValidationResult.Builder().subject(subject).valid(false).explanation(explanation).build();
     }

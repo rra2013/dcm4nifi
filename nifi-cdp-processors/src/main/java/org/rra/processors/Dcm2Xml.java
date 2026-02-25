@@ -1,6 +1,5 @@
 package org.rra.processors;
 
-import lombok.extern.slf4j.Slf4j;
 import org.apache.nifi.annotation.behavior.InputRequirement;
 import org.apache.nifi.annotation.behavior.SideEffectFree;
 import org.apache.nifi.annotation.behavior.SupportsBatching;
@@ -10,6 +9,7 @@ import org.apache.nifi.annotation.documentation.UseCase;
 import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.flowfile.attributes.CoreAttributes;
+import org.apache.nifi.logging.ComponentLog;
 import org.apache.nifi.processor.*;
 import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.util.StandardValidators;
@@ -18,15 +18,14 @@ import org.rra.dcm.Dicom2XmlTransformer;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
-@Slf4j
+
 @SupportsBatching
 @InputRequirement(InputRequirement.Requirement.INPUT_REQUIRED)
 @SideEffectFree
-@Tags({"CDP", "DICOM", "dcm2xml","xml"})
+@Tags({"CDP", "DICOM", "dcm2xml", "xml"})
 @CapabilityDescription("A DICOM XML Converter. Will convert a DICOM object in XML during the NIFI Workflows")
 @UseCase(description = "Convert a DICOM Object in XML",
         inputRequirement = InputRequirement.Requirement.INPUT_REQUIRED)
@@ -42,7 +41,7 @@ public class Dcm2Xml extends AbstractProcessor {
             .displayName("Bulk Data")
             .description("Include bulkdata in XML output; by default, references to bulkdata are included.")
             .required(true)
-            .allowableValues(DEFAULT_BULK_URI,NO_BULK_DATA, INCLUDE_BULK_DATA)
+            .allowableValues(DEFAULT_BULK_URI, NO_BULK_DATA, INCLUDE_BULK_DATA)
             .defaultValue(NO_BULK_DATA)
             .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
             .build();
@@ -75,20 +74,21 @@ public class Dcm2Xml extends AbstractProcessor {
         if (flowFile == null) {
             return;
         }
+        final ComponentLog log = getLogger();
         final Boolean inclBulk;
         final String xslTransformPath;
-        if (context.getProperty(BULK_DATA).isSet()){
+        if (context.getProperty(BULK_DATA).isSet()) {
             String selectedType = context.getProperty(BULK_DATA).evaluateAttributeExpressions().getValue();
-            if (selectedType.equalsIgnoreCase(INCLUDE_BULK_DATA)){
-              inclBulk = Boolean.TRUE;
-            } else if (selectedType.equalsIgnoreCase(NO_BULK_DATA)){
+            if (selectedType.equalsIgnoreCase(INCLUDE_BULK_DATA)) {
+                inclBulk = Boolean.TRUE;
+            } else if (selectedType.equalsIgnoreCase(NO_BULK_DATA)) {
                 inclBulk = Boolean.FALSE;
-            }else{
+            } else {
                 inclBulk = null;
             }
             //
             xslTransformPath = context.getProperty(XSL_TRANSFORM_PATH).evaluateAttributeExpressions(flowFile).getValue();
-        }else{
+        } else {
             return;
         }
         try {

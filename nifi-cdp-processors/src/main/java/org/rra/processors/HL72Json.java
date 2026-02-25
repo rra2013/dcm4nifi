@@ -1,6 +1,5 @@
 package org.rra.processors;
 
-import lombok.extern.slf4j.Slf4j;
 import org.apache.nifi.annotation.behavior.InputRequirement;
 import org.apache.nifi.annotation.behavior.SideEffectFree;
 import org.apache.nifi.annotation.behavior.SystemResource;
@@ -11,6 +10,7 @@ import org.apache.nifi.annotation.documentation.UseCase;
 import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.flowfile.attributes.CoreAttributes;
+import org.apache.nifi.logging.ComponentLog;
 import org.apache.nifi.processor.*;
 import org.apache.nifi.processor.exception.ProcessException;
 import org.rra.hl7.HL7Transformer;
@@ -26,8 +26,8 @@ import java.util.Set;
 @InputRequirement(InputRequirement.Requirement.INPUT_REQUIRED)
 @SideEffectFree
 @SystemResourceConsideration(resource = SystemResource.CPU)
-@Slf4j
-@Tags({"HL7", "HL72Json", "CDP","json"})
+
+@Tags({"HL7", "HL72Json", "CDP", "json"})
 @CapabilityDescription("Transform a HL7 MLLP Message to JSON.")
 @UseCase(description = "Processing HL7 Messages",
         inputRequirement = InputRequirement.Requirement.INPUT_REQUIRED)
@@ -44,6 +44,7 @@ public class HL72Json extends AbstractProcessor {
 
     private Set<Relationship> relationships;
     private List<PropertyDescriptor> descriptors;
+
     @Override
     protected void init(final ProcessorInitializationContext context) {
         relationships = Set.of(REL_SUCCESS, REL_FAILURE);
@@ -66,6 +67,7 @@ public class HL72Json extends AbstractProcessor {
         if (flowFile == null) {
             return;
         }
+        final ComponentLog log = getLogger();
         try {
             flowFile = session.write(flowFile, (in, out) -> {
                 try (OutputStream buffOut = new BufferedOutputStream(out)) {
