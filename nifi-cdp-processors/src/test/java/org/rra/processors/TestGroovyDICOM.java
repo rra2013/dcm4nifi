@@ -166,6 +166,35 @@ public class TestGroovyDICOM {
     }
 
 
+    @Test
+    public void test2_copy_attributes_groovy(){
+        runner.setProperty(ExecuteGroovyScript.ADD_CLASSPATH, LIB_RESOURCE_LOCATION);
+        runner.setProperty(ExecuteGroovyScript.SCRIPT_FILE, TEST_RESOURCE_LOCATION + "copy_attributes.groovy");
+        runner.assertValid();
+        dcmObjects.forEach(bytesArrayDcm -> {
+            runner.enqueue(bytesArrayDcm);
+            runner.run();
+        });
+        List<MockFlowFile> success = runner.getFlowFilesForRelationship(ExecuteGroovyScript.REL_SUCCESS);
+        runner.assertTransferCount(ExecuteGroovyScript.REL_SUCCESS, success.size());
+        success.forEach(mockFlowFile -> {
+            String patID = mockFlowFile.getAttribute("PatientID");
+            assertNotNull(patID);
+            String studyUID = mockFlowFile.getAttribute("StudyInstanceUID");
+            assertNotNull(studyUID);
+            String serUID = mockFlowFile.getAttribute("SeriesInstanceUID");
+            assertNotNull(serUID);
+            String hexStudy = mockFlowFile.getAttribute("HexStudyIUID");
+            assertNotNull(hexStudy);
+            String hexSeries = mockFlowFile.getAttribute("HexSeriesIUID");
+            assertNotNull(hexSeries);
+           log.info("patID:{}", patID);
+           log.info("hexStudy:{}", hexStudy);
+           log.info("hexSeries:{}", hexSeries);
+        });
+    }
+
+
     @BeforeEach
     public void setup() {
         //init processor
