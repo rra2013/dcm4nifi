@@ -1,7 +1,10 @@
-# dcm4nifi
+# dcm4nifi – DICOM & HL7 Toolkit for Apache NiFi
+
 ## Introduction
 
 Unlock seamless healthcare data integration with a powerful DICOM and HL7 toolset for Apache NiFi 2.4. Built on the robust HAPI and dcm4che libraries, this solution enables efficient processing of medical data while ensuring secure pseudonymization and anonymization—making it ideal for modern, AI-driven research and scalable digital health initiatives.
+
+---
 
 ## Advantages of Using Apache NiFi Compared to Proprietary Solutions
 
@@ -9,9 +12,11 @@ Apache NiFi, as an open-source data integration platform, offers a cost-effectiv
 
 Thanks to open standards and the ability to easily integrate custom processors (e.g., in Java), NiFi is ideally suited for heterogeneous system landscapes and customer-specific requirements. Companies benefit from significant cost savings, greater adaptability, and a reduced time-to-market. This makes NiFi particularly well-suited for dynamic data environments and digital transformation projects.
 
-## DICOM and HL7 Toolset for Apache NiFi 2.4 based on HAPI and dcm4che libraries
+---
 
-I developed a specialized DICOM and HL7 toolset for Apache NiFi 2.4, built on top of the proven HAPI and dcm4che libraries, to enable seamless integration of healthcare data standards into modern data flow architectures. The toolkit extends Apache NiFi with processors and components specifically designed for handling, transforming, routing, and validating medical messaging and imaging data.
+## DICOM & HL7 Toolset
+
+I developed a specialized DICOM and HL7 toolset for Apache NiFi 2.4, built on the proven HAPI and dcm4che libraries, to enable seamless integration of healthcare data standards into modern data flow architectures. The toolkit extends Apache NiFi with processors and components specifically designed for handling, transforming, routing, and validating medical messaging and imaging data.
 
 By combining HL7 messaging capabilities with DICOM-based imaging workflows, the toolset supports the integration of clinical and radiological systems such as HIS, RIS, PACS, and other healthcare applications. It enables the processing of HL7 v2 messages for admissions, orders, results, and other clinical events, while also supporting DICOM communication and metadata handling for imaging-related workflows.
 
@@ -25,4 +30,26 @@ Integrated into Apache NiFi’s visual flow-based environment, the toolset allow
 
 The result is a flexible and scalable solution for real-time healthcare data exchange, capable of reducing implementation effort, improving interoperability between medical systems, and accelerating the delivery of digital healthcare and AI-driven research projects.
 
-### Use the Master Branch!!!!
+---
+
+## Key Features
+
+- HL7 v2 message processing (parsing, validation, transformation)
+- DICOM networking and file handling
+- Seamless integration with HIS, RIS, and PACS
+- Visual flow-based orchestration with Apache NiFi
+- **DICOM pseudonymization and anonymization for research**
+- AI-ready data preparation pipelines
+- Extensible architecture for custom processors
+
+---
+
+## Why It Matters
+
+This toolkit enables healthcare organizations to securely unlock the value of medical data for AI, research, and digital transformation—without compromising patient privacy.
+
+---
+
+## Important
+
+Please use the `master` branch for the latest stable version.
