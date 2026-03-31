@@ -71,6 +71,7 @@ The toolkit supports data handling practices aligned with regulations such as GD
 - HL7 v2 message processing (parsing, validation, transformation)
 - DICOM networking and file handling (C-STORE SCP/SCU, C-FIND SCU, C-MOVE SCU, C-GET SCU)
 - DICOM compression and decompression for optimized storage and efficient data transfer
+- Flexible DICOM tag manipulation and metadata transformation
 - Seamless integration with HIS, RIS, and PACS
 - Visual flow-based orchestration with Apache NiFi
 - **DICOM pseudonymization and anonymization for research**
