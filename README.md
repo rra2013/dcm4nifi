@@ -86,7 +86,7 @@ This toolkit enables healthcare organizations to securely unlock the value of me
 
 ---
 
-## ⚠ Important
+## Important
 
 Please use the `master` branch for the latest stable version.
 
