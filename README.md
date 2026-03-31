@@ -8,6 +8,8 @@
 
 dcm4nifi is an open-source DICOM and HL7 integration toolkit for Apache NiFi, enabling seamless healthcare data processing, pseudonymization, and anonymization for AI-ready medical data pipelines.
 
+dcm4nifi brings native DICOM capabilities to Apache NiFi, allowing the implementation of scalable and secure DICOM workflows within NiFi-based data pipelines.
+
 > A powerful extension for Apache NiFi to process, transform, and securely prepare DICOM and HL7 data for research, interoperability, and machine learning applications.
 
 ---
@@ -23,6 +25,21 @@ Unlock seamless healthcare data integration with a powerful DICOM and HL7 toolse
 Apache NiFi, as an open-source data integration platform, offers a cost-effective, flexible, and extensible alternative to proprietary systems for automating data flows and real-time integrations. Compared to commercial solutions, NiFi eliminates licensing costs entirely, while its visual development environment and modular architecture significantly reduce development time and maintenance effort.
 
 Thanks to open standards and the ability to easily integrate custom processors (e.g., in Java), NiFi is ideally suited for heterogeneous system landscapes and customer-specific requirements. Companies benefit from significant cost savings, greater adaptability, and a reduced time-to-market. This makes NiFi particularly well-suited for dynamic data environments and digital transformation projects.
+
+---
+
+## DICOM Processing with Apache NiFi
+
+dcm4nifi enables native DICOM processing within Apache NiFi, allowing users to build scalable and flexible data pipelines for medical imaging workflows.
+
+With dcm4nifi, Apache NiFi can be used to:
+
+- Process and route DICOM data within NiFi pipelines
+- Integrate PACS, RIS, and other radiology systems
+- Perform DICOM anonymization and pseudonymization
+- Prepare medical imaging data for AI and machine learning workflows
+
+This makes Apache NiFi a powerful platform for handling DICOM-based workflows in modern healthcare and research environments.
 
 ---
 
@@ -69,7 +86,7 @@ The toolkit supports data handling practices aligned with regulations such as GD
 ## Key Features
 
 - HL7 v2 message processing (parsing, validation, transformation)
-- DICOM networking and file handling (C-STORE SCP/SCU, C-FIND SCU, C-MOVE SCU, C-GET SCU)
+- DICOM networking and file handling (C-STORE SCP/SCU, C-FIND, C-MOVE, C-GET)
 - DICOM compression and decompression for optimized storage and efficient data transfer
 - Flexible DICOM tag manipulation and metadata transformation
 - Seamless integration with HIS, RIS, and PACS
@@ -89,6 +106,16 @@ This toolkit enables healthcare organizations to securely unlock the value of me
 ## Important
 
 Please use the `master` branch for the latest stable version.
+
+---
+
+## License
+
+This project is licensed under the MIT License.
+
+See [LICENSE](./LICENSE) for details.
+
+---
 
 ## Third-Party Licenses
 
