@@ -4,7 +4,7 @@
 ![DICOM](https://img.shields.io/badge/DICOM-supported-green)
 ![HL7](https://img.shields.io/badge/HL7-v2-orange)
 ![dcm4che](https://img.shields.io/badge/dcm4che-DICOM%20Toolkit-blueviolet)
-![License](https://img.shields.io/badge/license-Apache%202.0-blue)
+![License](https://img.shields.io/badge/license-MIT-blue)
 
 dcm4nifi is an open-source DICOM and HL7 integration toolkit for Apache NiFi, enabling seamless healthcare data processing, pseudonymization, and anonymization for AI-ready medical data pipelines.
 
