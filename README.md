@@ -65,3 +65,12 @@ This toolkit enables healthcare organizations to securely unlock the value of me
 ## Important
 
 Please use the `master` branch for the latest stable version.
+
+## Third-Party Licenses
+
+This project depends on third-party libraries, including:
+
+- dcm4che (Apache License 2.0)
+- HAPI HL7 (Apache License 2.0)
+
+For full license information, see [THIRD_PARTY_LICENSES.md](./THIRD_PARTY_LICENSES.md).
