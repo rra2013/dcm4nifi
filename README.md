@@ -1,6 +1,10 @@
 # dcm4nifi – DICOM & HL7 Toolkit for Apache NiFi
 
-dcm4nifi is an open-source DICOM and HL7 integration toolkit for Apache NiFi, designed for seamless healthcare data processing, interoperability, and AI-ready data pipelines.
+dcm4nifi is an open-source DICOM and HL7 integration toolkit for Apache NiFi, enabling seamless healthcare data processing, pseudonymization, and anonymization for AI-ready medical data pipelines.
+
+> A powerful extension for Apache NiFi to process, transform, and securely prepare DICOM and HL7 data for research, interoperability, and machine learning applications.
+
+---
 
 ## Introduction
 
