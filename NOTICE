@@ -1,4 +1,4 @@
-This project uses third-party libraries:
+This project includes third-party libraries:
 
 - dcm4che (https://github.com/dcm4che/dcm4che)
   Licensed under the Apache License 2.0
@@ -6,4 +6,5 @@ This project uses third-party libraries:
 - HAPI HL7 (https://github.com/hapifhir/hapi-hl7v2)
   Licensed under the Apache License 2.0
 
-These libraries are included and used in compliance with their respective licenses.
+Apache License 2.0:
+http://www.apache.org/licenses/LICENSE-2.0

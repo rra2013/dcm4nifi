@@ -73,4 +73,4 @@ This project depends on third-party libraries, including:
 - dcm4che (Apache License 2.0)
 - HAPI HL7 (Apache License 2.0)
 
-For full license information, see [THIRD_PARTY_LICENSES.md](./THIRD_PARTY_LICENSES.md).
+For full license information, see [NOTICE](./NOTICE).
