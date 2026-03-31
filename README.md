@@ -44,6 +44,28 @@ The result is a flexible and scalable solution for real-time healthcare data exc
 
 ---
 
+## Security & Data Handling
+
+Handling sensitive healthcare data requires strict security and compliance measures. This toolkit is designed with privacy and data protection in mind, supporting secure and compliant data processing workflows.
+
+### Pseudonymization and Anonymization
+
+The toolkit provides flexible mechanisms for pseudonymization and anonymization of DICOM data. Sensitive patient information can be removed or replaced while preserving the integrity and usability of medical imaging data for research and AI applications.
+
+### Secure Data Processing
+
+Built on Apache NiFi, the toolset benefits from secure data flow management, including:
+
+- Fine-grained access control
+- Data provenance and audit tracking
+- Secure data routing and transformation
+
+### Compliance
+
+The toolkit supports data handling practices aligned with regulations such as GDPR (EU) and DSG (Switzerland), enabling organizations to safely use medical data for research and machine learning without compromising patient privacy.
+
+---
+
 ## Key Features
 
 - HL7 v2 message processing (parsing, validation, transformation)
