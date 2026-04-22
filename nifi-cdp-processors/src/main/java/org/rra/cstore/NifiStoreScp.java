@@ -183,7 +183,7 @@ public class NifiStoreScp {
                     try(BufferedOutputStream bos = new BufferedOutputStream(flowFileOutputStream)){
                         storeAttributesTo(bos, as.createFileMetaInformation(iuid, cuid, tsuid), data);
                     }
-                    log.info("+ + + DICOM Object received -> SOPIUID: {} + + +", iuid);
+                    log.debug("+ + + DICOM Object received -> SOPIUID: {} + + +", iuid);
                 } catch (SocketException socketException) {
                     log.error("Socket exception during data transfer", socketException);
                     processSession.rollback();
@@ -218,7 +218,7 @@ public class NifiStoreScp {
 
                 processSession.commitAsync(() -> {
                     // if data transfer ok - send transfer complete message
-                    log.info("# # # C-Store Process Complete # # #");
+                    log.debug("# # # C-Store Process Complete # # #");
                 });
 
             } catch (Exception e) {
