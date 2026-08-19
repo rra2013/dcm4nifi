@@ -12,6 +12,7 @@ import org.dcm4che3.data.Attributes;
 import org.dcm4che3.data.Tag;
 import org.dcm4che3.data.UID;
 import org.dcm4che3.data.VR;
+import org.dcm4che3.io.DicomInputStream;
 import org.dcm4che3.io.DicomOutputStream;
 import org.dcm4che3.net.*;
 import org.dcm4che3.net.pdu.PresentationContext;
@@ -25,6 +26,8 @@ import org.dcm4che3.util.StringUtils;
 
 import java.io.*;
 import java.net.SocketException;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.Properties;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
@@ -179,11 +182,28 @@ public class NifiStoreScp {
             FlowFile flowFile = processSession.create();
             try {
                 long t1 = System.nanoTime();
+                String studyInstanceUID;
+                String seriesInstanceUID;
+                String patientID;
                 try (OutputStream flowFileOutputStream = processSession.write(flowFile)) {
                     try(BufferedOutputStream bos = new BufferedOutputStream(flowFileOutputStream)){
                         storeAttributesTo(bos, as.createFileMetaInformation(iuid, cuid, tsuid), data);
                     }
                     log.debug("+ + + DICOM Object received -> SOPIUID: {} + + +", iuid);
+                    // New read dicom attrributes
+                    Attributes dicomAttributes;
+                    try (InputStream inputStream = processSession.read(flowFile)) {
+                        dicomAttributes = parse(inputStream);
+                    }
+                    studyInstanceUID = dicomAttributes.getString(Tag.StudyInstanceUID);
+                    seriesInstanceUID = dicomAttributes.getString(Tag.SeriesInstanceUID);
+                    patientID = dicomAttributes.getString(Tag.PatientID, "NO-ID");
+                    log.debug(
+                            "StudyInstanceUID={}, SeriesInstanceUID={}",
+                            studyInstanceUID,
+                            seriesInstanceUID
+                    );
+
                 } catch (SocketException socketException) {
                     log.error("Socket exception during data transfer", socketException);
                     processSession.rollback();
@@ -201,11 +221,24 @@ public class NifiStoreScp {
                     processSession.putAttribute(flowFile, "TransferSyntax", tsuid);
                     processSession.putAttribute(flowFile, "CallingAET", callingAET);
                     processSession.putAttribute(flowFile, "CalledAET", calledAET);
+                    // new attributes
+                    processSession.putAttribute(flowFile, "StudyInstanceUID", studyInstanceUID);
+                    processSession.putAttribute(flowFile, "SeriesInstanceUID", seriesInstanceUID);
+                    processSession.putAttribute(flowFile, "PatientID", patientID);
+
+                    MessageDigest md5 = MessageDigest.getInstance("MD5");
+                    byte[] studyUIDhash = md5.digest(studyInstanceUID.getBytes());
+                    byte[] seriesUIDhash = md5.digest(seriesInstanceUID.getBytes());
+                    String hexSeriesUIDAttr = HexFormat.of().formatHex(seriesUIDhash);
+                    String hexStudyUIDAttr = HexFormat.of().formatHex(studyUIDhash);
+                    //
+                    processSession.putAttribute(flowFile, "HexStudyIUID", hexStudyUIDAttr);
+                    processSession.putAttribute(flowFile, "HexSeriesIUID", hexSeriesUIDAttr);
+                    //
                     String fileName = flowFile.getAttribute(CoreAttributes.FILENAME.key()) + ".dcm";
                     flowFile = processSession.putAttribute(flowFile, CoreAttributes.FILENAME.key(), fileName);
                     //Transfer application/dicom
                     flowFile = processSession.putAttribute(flowFile, CoreAttributes.MIME_TYPE.key(), "application/dicom");
-                    //processSession.getProvenanceReporter().modifyContent(flowFile);
                     final long importNanos = System.nanoTime() - t1;
                     final long importMillis = TimeUnit.MILLISECONDS.convert(importNanos, TimeUnit.NANOSECONDS);
                     processSession.getProvenanceReporter().receive(flowFile, callingAET, importMillis);
@@ -226,7 +259,15 @@ public class NifiStoreScp {
             }
         }
 
-
+        private Attributes parse(InputStream in) throws IOException {
+            DicomInputStream din = new DicomInputStream(in);
+            try {
+                din.setIncludeBulkData(DicomInputStream.IncludeBulkData.NO);
+                return din.readDatasetUntilPixelData();
+            } finally {
+                SafeClose.close(in);
+            }
+        }
         private void storeAttributesTo(OutputStream outputStream, Attributes fmi, PDVInputStream data){
             try {
                 DicomOutputStream out = new DicomOutputStream(outputStream, UID.ExplicitVRLittleEndian);
@@ -241,6 +282,7 @@ public class NifiStoreScp {
         }
 
     }
+
     /*
     private class MppsSCP extends BasicMPPSSCP {
 
