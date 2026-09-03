@@ -185,6 +185,7 @@ public class NifiStoreScp {
                 String studyInstanceUID;
                 String seriesInstanceUID;
                 String patientID;
+                String modality;
                 try (OutputStream flowFileOutputStream = processSession.write(flowFile)) {
                     try(BufferedOutputStream bos = new BufferedOutputStream(flowFileOutputStream)){
                         storeAttributesTo(bos, as.createFileMetaInformation(iuid, cuid, tsuid), data);
@@ -198,6 +199,7 @@ public class NifiStoreScp {
                     studyInstanceUID = dicomAttributes.getString(Tag.StudyInstanceUID);
                     seriesInstanceUID = dicomAttributes.getString(Tag.SeriesInstanceUID);
                     patientID = dicomAttributes.getString(Tag.PatientID, "NO-ID");
+                    modality = dicomAttributes.getString(Tag.Modality,"OT");
                     log.debug(
                             "StudyInstanceUID={}, SeriesInstanceUID={}",
                             studyInstanceUID,
@@ -225,6 +227,7 @@ public class NifiStoreScp {
                     processSession.putAttribute(flowFile, "StudyInstanceUID", studyInstanceUID);
                     processSession.putAttribute(flowFile, "SeriesInstanceUID", seriesInstanceUID);
                     processSession.putAttribute(flowFile, "PatientID", patientID);
+                    processSession.putAttribute(flowFile, "Modality", modality);
 
                     MessageDigest md5 = MessageDigest.getInstance("MD5");
                     byte[] studyUIDhash = md5.digest(studyInstanceUID.getBytes());
