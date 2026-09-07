@@ -24,7 +24,10 @@ import org.dcm4che3.util.SafeClose;
 import org.dcm4che3.util.StreamUtils;
 import org.dcm4che3.util.StringUtils;
 
-import java.io.*;
+import java.io.BufferedOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.SocketException;
 import java.security.MessageDigest;
 import java.util.HexFormat;
@@ -44,20 +47,8 @@ public class NifiStoreScp {
     private CountDownLatch sessionFactorySetSignal;
     private Relationship relationshipSuccess;
 
-    public NifiStoreScp(String host, int port, String calledAET){
+    public NifiStoreScp(String host, int port, String calledAET) {
         init(host, port, calledAET);
-    }
-
-    public boolean shutDown(){
-        log.info("+ + + Shutting down Store SCP + + +");
-        try {
-            this.device.unbindConnections();
-            scheduledExecutorService.shutdown();
-            return executorService.awaitTermination(3, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-
-        }
-        return false;
     }
 
     public static String[] toUIDs(String s) {
@@ -90,6 +81,18 @@ public class NifiStoreScp {
         return p;
     }
 
+    public boolean shutDown() {
+        log.info("+ + + Shutting down Store SCP + + +");
+        try {
+            this.device.unbindConnections();
+            scheduledExecutorService.shutdown();
+            return executorService.awaitTermination(3, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+
+        }
+        return false;
+    }
+
     private void init(String host, int port, String calledAET) {
         Properties p;
         try {
@@ -103,7 +106,6 @@ public class NifiStoreScp {
             ae.addConnection(conn);
             ae.setAETitle(calledAET);
             //Bind to 0.0.0.0!!!
-            //Dont set the host
             conn.setHostname(host);
             conn.setPort(port);
             for (String cuid : p.stringPropertyNames()) {
@@ -120,13 +122,15 @@ public class NifiStoreScp {
             log.error(e.getMessage(), e);
         }
     }
-    public void start(){
+
+    public void start() {
         try {
             device.bindConnections();
         } catch (Exception e) {
             throw new ProcessException("Store-SCP server could not be started.", e);
         }
     }
+
     private DicomServiceRegistry createServiceRegistry(/*String storageDir*/) {
         DicomServiceRegistry serviceRegistry = new DicomServiceRegistry();
         serviceRegistry.addDicomService(new BasicCEchoSCP());
@@ -142,6 +146,7 @@ public class NifiStoreScp {
     public void setSessionFactorySetSignal(CountDownLatch sessionFactorySetSignal) {
         this.sessionFactorySetSignal = sessionFactorySetSignal;
     }
+
     private ProcessSession createProcessSession() throws InterruptedException, TimeoutException {
         ProcessSessionFactory processSessionFactory = getProcessSessionFactory();
         return processSessionFactory.createSession();
@@ -187,7 +192,7 @@ public class NifiStoreScp {
                 String patientID;
                 String modality;
                 try (OutputStream flowFileOutputStream = processSession.write(flowFile)) {
-                    try(BufferedOutputStream bos = new BufferedOutputStream(flowFileOutputStream)){
+                    try (BufferedOutputStream bos = new BufferedOutputStream(flowFileOutputStream)) {
                         storeAttributesTo(bos, as.createFileMetaInformation(iuid, cuid, tsuid), data);
                     }
                     log.debug("+ + + DICOM Object received -> SOPIUID: {} + + +", iuid);
@@ -199,7 +204,7 @@ public class NifiStoreScp {
                     studyInstanceUID = dicomAttributes.getString(Tag.StudyInstanceUID);
                     seriesInstanceUID = dicomAttributes.getString(Tag.SeriesInstanceUID);
                     patientID = dicomAttributes.getString(Tag.PatientID, "NO-ID");
-                    modality = dicomAttributes.getString(Tag.Modality,"OT");
+                    modality = dicomAttributes.getString(Tag.Modality, "OT");
                     log.debug(
                             "StudyInstanceUID={}, SeriesInstanceUID={}",
                             studyInstanceUID,
@@ -271,7 +276,8 @@ public class NifiStoreScp {
                 SafeClose.close(in);
             }
         }
-        private void storeAttributesTo(OutputStream outputStream, Attributes fmi, PDVInputStream data){
+
+        private void storeAttributesTo(OutputStream outputStream, Attributes fmi, PDVInputStream data) {
             try {
                 DicomOutputStream out = new DicomOutputStream(outputStream, UID.ExplicitVRLittleEndian);
                 try {
@@ -285,123 +291,4 @@ public class NifiStoreScp {
         }
 
     }
-
-    /*
-    private class MppsSCP extends BasicMPPSSCP {
-
-        private final File storageDir;
-        private IOD mppsNCreateIOD;
-        private IOD mppsNSetIOD;
-
-        public MppsSCP(String _storageDir) {
-
-            storageDir = new File(_storageDir, "mpps");
-
-            if (storageDir != null)
-                storageDir.mkdirs();
-
-
-            //Configure mpps IOD's
-            try {
-                mppsNCreateIOD = IOD.load("resource:mpps-ncreate-iod.xml");
-                mppsNSetIOD = IOD.load("resource:mpps-nset-iod.xml");
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-
-        }
-
-        @Override
-        protected Attributes create(Association as, Attributes rq,
-                                    Attributes rqAttrs, Attributes rsp) throws DicomServiceException {
-            return create(as, rq, rqAttrs);
-        }
-
-        @Override
-        protected Attributes set(Association as, Attributes rq, Attributes rqAttrs,
-                                 Attributes rsp) throws DicomServiceException {
-            return set(as, rq, rqAttrs);
-        }
-
-        private Attributes create(Association as, Attributes rq, Attributes rqAttrs)
-                throws DicomServiceException {
-            if (mppsNCreateIOD != null) {
-                ValidationResult result = rqAttrs.validate(mppsNCreateIOD);
-                if (!result.isValid())
-                    throw DicomServiceException.valueOf(result, rqAttrs);
-            }
-            if (storageDir == null)
-                return null;
-            String cuid = rq.getString(Tag.AffectedSOPClassUID);
-            String iuid = rq.getString(Tag.AffectedSOPInstanceUID);
-            File file = new File(storageDir, iuid);
-            if (file.exists())
-                throw new DicomServiceException(Status.DuplicateSOPinstance).
-                        setUID(Tag.AffectedSOPInstanceUID, iuid);
-            DicomOutputStream out = null;
-            log.info("{}: M-WRITE {}", as, file);
-            try {
-                out = new DicomOutputStream(file);
-                out.writeDataset(
-                        Attributes.createFileMetaInformation(iuid, cuid,
-                                UID.ExplicitVRLittleEndian),
-                        rqAttrs);
-
-            } catch (IOException e) {
-                log.warn(as + ": Failed to store MPPS:", e);
-                throw new DicomServiceException(Status.ProcessingFailure, e);
-            } finally {
-                SafeClose.close(out);
-            }
-            return null;
-        }
-
-        private Attributes set(Association as, Attributes rq, Attributes rqAttrs)
-                throws DicomServiceException {
-            if (mppsNSetIOD != null) {
-                ValidationResult result = rqAttrs.validate(mppsNSetIOD);
-                if (!result.isValid())
-                    throw DicomServiceException.valueOf(result, rqAttrs);
-            }
-            if (storageDir == null)
-                return null;
-            String cuid = rq.getString(Tag.RequestedSOPClassUID);
-            String iuid = rq.getString(Tag.RequestedSOPInstanceUID);
-            File file = new File(storageDir, iuid);
-            if (!file.exists())
-                throw new DicomServiceException(Status.NoSuchObjectInstance).
-                        setUID(Tag.AffectedSOPInstanceUID, iuid);
-            log.info("{}: M-UPDATE {}", as, file);
-            Attributes data;
-            DicomInputStream in = null;
-            try {
-                in = new DicomInputStream(file);
-                data = in.readDataset(-1, -1);
-            } catch (IOException e) {
-                log.warn(as + ": Failed to read MPPS:", e);
-                throw new DicomServiceException(Status.ProcessingFailure, e);
-            } finally {
-                SafeClose.close(in);
-            }
-            if (!"IN PROGRESS".equals(data.getString(Tag.PerformedProcedureStepStatus)))
-                BasicMPPSSCP.mayNoLongerBeUpdated();
-
-            data.addAll(rqAttrs);
-            DicomOutputStream out = null;
-            try {
-                out = new DicomOutputStream(file);
-                out.writeDataset(
-                        Attributes.createFileMetaInformation(iuid, cuid, UID.ExplicitVRLittleEndian),
-                        data);
-            } catch (IOException e) {
-                log.warn(as + ": Failed to update MPPS:", e);
-                throw new DicomServiceException(Status.ProcessingFailure, e);
-            } finally {
-                SafeClose.close(out);
-            }
-            return null;
-        }
-
-    }
-     */
 }

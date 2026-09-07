@@ -34,7 +34,13 @@ import java.util.concurrent.atomic.AtomicReference;
         @WritesAttribute(attribute = "AffectedSOPInstanceUID", description = "The Affected SOP Instance UID"),
         @WritesAttribute(attribute = "TransferSyntax", description = "The Transfer Syntax of the DICOM Object"),
         @WritesAttribute(attribute = "CallingAET", description = "The Calling AET of the Associate AC"),
-        @WritesAttribute(attribute = "CalledAET", description = "The Called AET of the Associate AC")
+        @WritesAttribute(attribute = "CalledAET", description = "The Called AET of the Associate AC"),
+        @WritesAttribute(attribute = "StudyInstanceUID", description = "The StudyInstanceUID of the data"),
+        @WritesAttribute(attribute = "SeriesInstanceUID", description = "The SeriesInstanceUID of the data"),
+        @WritesAttribute(attribute = "PatientID", description = "The PatientID of the data"),
+        @WritesAttribute(attribute = "Modality", description = "The Modality of the data"),
+        @WritesAttribute(attribute = "HexStudyIUID", description = "The Hex value of StudyInstanceUID"),
+        @WritesAttribute(attribute = "HexSeriesIUID", description = "The Hex value of SeriesInstanceUID")
 })
 
 public class StoreScp extends AbstractSessionFactoryProcessor {
