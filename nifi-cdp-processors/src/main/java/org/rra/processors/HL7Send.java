@@ -61,10 +61,6 @@ public class HL7Send extends AbstractProcessor {
             .description("Transform success")
             .build();
 
-    public static final Relationship REL_ACKNOWLEDGE = new Relationship.Builder()
-            .name("acknowledge")
-            .description("Transform acknowledgment")
-            .build();
 
     public static final Relationship REL_FAILURE = new Relationship.Builder()
             .name("failure")

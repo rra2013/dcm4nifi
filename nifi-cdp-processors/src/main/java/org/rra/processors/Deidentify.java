@@ -30,17 +30,6 @@ import java.util.concurrent.atomic.AtomicReference;
         inputRequirement = InputRequirement.Requirement.INPUT_REQUIRED)
 public class Deidentify extends AbstractProcessor {
 
-
-   /* public static final PropertyDescriptor DEIDENT_MODEL = new PropertyDescriptor
-            .Builder()
-            .name("Model")
-            .displayName("Model")
-            .description("The deidentify model for the process")
-            .required(true)
-            .defaultValue("deidentify.json")
-            .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
-            .build();*/
-
     public static final Relationship REL_SUCCESS = new Relationship.Builder()
             .name("success")
             .description("Success relationship of the de-identification process")
