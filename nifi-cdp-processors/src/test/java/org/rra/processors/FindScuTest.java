@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.rra.cfind.NifiFindScu;
-import org.rra.cfind.NifiFindScuConfig;
+import org.rra.dcmconfig.DcmConfig;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -103,8 +103,8 @@ public class FindScuTest {
             log.info("Skipping test because DICOM INTEGRATION_TESTS");
             return;
         }
-        NifiFindScuConfig cfg = new NifiFindScuConfig();
-        cfg.QUERY_LEVEL= NifiFindScuConfig.FIND_LEVEL.STUDY;
+        DcmConfig cfg = new DcmConfig();
+        cfg.FIND_LEVEL = DcmConfig.LEVEL.STUDY;
 
         NifiFindScu findSCU = new NifiFindScu("FIND", DICOM_SERVER_AET, DICOM_SERVER_HOST, DICOM_SERVER_PORT, cfg);
         //Pat/Study level
@@ -141,8 +141,8 @@ public class FindScuTest {
             log.info("Skipping test because DICOM INTEGRATION_TESTS");
             return;
         }
-        NifiFindScuConfig cfg = new NifiFindScuConfig();
-        cfg.QUERY_LEVEL= NifiFindScuConfig.FIND_LEVEL.SERIES;
+        DcmConfig cfg = new DcmConfig();
+        cfg.FIND_LEVEL = DcmConfig.LEVEL.SERIES;
         NifiFindScu findSCU = new NifiFindScu("FIND", DICOM_SERVER_AET, DICOM_SERVER_HOST, DICOM_SERVER_PORT, cfg);
         //Series level
         final List<Attributes> resultSet = new ArrayList<>();
@@ -177,8 +177,8 @@ public class FindScuTest {
             log.info("Skipping test because DICOM INTEGRATION_TESTS");
             return;
         }
-        NifiFindScuConfig cfg = new NifiFindScuConfig();
-        cfg.QUERY_LEVEL= NifiFindScuConfig.FIND_LEVEL.IMAGE;
+        DcmConfig cfg = new DcmConfig();
+        cfg.FIND_LEVEL = DcmConfig.LEVEL.IMAGE;
         NifiFindScu findSCU = new NifiFindScu("FIND", DICOM_SERVER_AET, DICOM_SERVER_HOST, DICOM_SERVER_PORT, cfg);
         //Image level
         final List<Attributes> resultSet = new ArrayList<>();

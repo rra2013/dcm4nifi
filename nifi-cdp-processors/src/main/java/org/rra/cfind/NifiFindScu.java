@@ -8,6 +8,7 @@ import org.dcm4che3.net.pdu.ExtendedNegotiation;
 import org.dcm4che3.net.pdu.PresentationContext;
 import org.dcm4che3.util.SafeClose;
 import org.dcm4che3.util.StringUtils;
+import org.rra.dcmconfig.DcmConfig;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -56,7 +57,7 @@ public class NifiFindScu {
     private Association as;
     private IResultListener resultListener;
 
-    public NifiFindScu(String callingAET, String calledAET, String host, int port, NifiFindScuConfig cfg) {
+    public NifiFindScu(String callingAET, String calledAET, String host, int port, DcmConfig cfg) {
         device.addConnection(conn);
         applicationEntity = new ApplicationEntity(callingAET);
         device.addApplicationEntity(applicationEntity);
@@ -73,18 +74,18 @@ public class NifiFindScu {
         setCancelAfter(0);
         setPriority(Priority.NORMAL);
 
-        if (cfg.QUERY_LEVEL == NifiFindScuConfig.FIND_LEVEL.STUDY) {
+        if (cfg.FIND_LEVEL == DcmConfig.LEVEL.STUDY) {
             configureFindSCUForPatStudyLevel();
-        } else if (cfg.QUERY_LEVEL == NifiFindScuConfig.FIND_LEVEL.SERIES) {
+        } else if (cfg.FIND_LEVEL == DcmConfig.LEVEL.SERIES) {
             configureFindSCUForSeriesLevel();
-        } else if (cfg.QUERY_LEVEL == NifiFindScuConfig.FIND_LEVEL.IMAGE) {
+        } else if (cfg.FIND_LEVEL == DcmConfig.LEVEL.IMAGE) {
             configureFindSCUForImageLevel();
         } else {
             configureFindSCUForPatStudyLevel();
         }
     }
 
-    private static void configureKeys(NifiFindScu that, NifiFindScuConfig.FIND_LEVEL level, String[] optVals) {
+    private static void configureKeys(NifiFindScu that, DcmConfig.LEVEL level, String[] optVals) {
 
         addEmptyAttributes(that.getKeys(), optVals);
         that.addLevel(String.valueOf(level));
@@ -169,7 +170,7 @@ public class NifiFindScu {
         that.setInformationModel(model, transferSyntaxesOf(), queryOptionsOf(qo_relational, qo_datetime, qo_fuzzy, qo_timezone));
     }
 
-    private static void configure(Connection conn, NifiFindScuConfig cfg) {
+    private static void configure(Connection conn, DcmConfig cfg) {
         // -- max-pdulen-rcv
         // -- max-pdulen-snd
         // 16378 by default
@@ -213,7 +214,7 @@ public class NifiFindScu {
 
         configureServiceClass(this, StudyRoot, false, false, false, false);
 
-        configureKeys(this, NifiFindScuConfig.FIND_LEVEL.STUDY, optVals_StudyLevel);
+        configureKeys(this, DcmConfig.LEVEL.STUDY, optVals_StudyLevel);
 
     }
 
@@ -223,7 +224,7 @@ public class NifiFindScu {
          * For Series Level
          */
         configureServiceClass(this, StudyRoot, true, false, false, false);
-        configureKeys(this, NifiFindScuConfig.FIND_LEVEL.SERIES, optVals_SeriesLevel);
+        configureKeys(this, DcmConfig.LEVEL.SERIES, optVals_SeriesLevel);
     }
 
     private void configureFindSCUForImageLevel() {
@@ -232,7 +233,7 @@ public class NifiFindScu {
          * For Series Level
          */
         configureServiceClass(this, StudyRoot, true, false, false, false);
-        configureKeys(this, NifiFindScuConfig.FIND_LEVEL.IMAGE, optVals_ImageLevel);
+        configureKeys(this, DcmConfig.LEVEL.IMAGE, optVals_ImageLevel);
     }
 
     public final void setPriority(int priority) {

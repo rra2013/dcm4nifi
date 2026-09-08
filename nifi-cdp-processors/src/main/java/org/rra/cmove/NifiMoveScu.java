@@ -7,6 +7,7 @@ import org.dcm4che3.net.pdu.AAssociateRQ;
 import org.dcm4che3.net.pdu.ExtendedNegotiation;
 import org.dcm4che3.net.pdu.PresentationContext;
 import org.dcm4che3.util.TagUtils;
+import org.rra.dcmconfig.DcmConfig;
 
 import java.io.IOException;
 import java.io.InterruptedIOException;
@@ -29,20 +30,12 @@ public class NifiMoveScu extends Device {
     private int priority;
     private String destination;
     private InformationModel model;
-    private final int[] inFilter = DEF_IN_FILTER;
     private Association as;
     private int cancelAfter;
     private boolean releaseEager;
     private ScheduledFuture<?> scheduledCancel;
 
-    private static final int CONNECT_TIMEOUT  = 5_000;
-    private static final int REQUEST_TIMEOUT  = 10_000;
-    private static final int RESPONSE_TIMEOUT = 300_000;
-    private static final int ACCEPT_TIMEOUT   = 20_000; //
-    private static final int RELEASE_TIMEOUT  = 5_000;
-    private static final int SEND_TIMEOUT     = 30_000;
-
-    public NifiMoveScu(String host, int port, String callingAET, String calledAET, String moveAET) {
+    public NifiMoveScu(String host, int port, String callingAET, String calledAET, String moveAET, DcmConfig cfg) {
         super("movescu");
         ae = new ApplicationEntity(callingAET);
         addConnection(conn);
@@ -55,18 +48,28 @@ public class NifiMoveScu extends Device {
         //configure
         conn.setReceivePDULength(Connection.DEF_MAX_PDU_LENGTH);
         conn.setSendPDULength(Connection.DEF_MAX_PDU_LENGTH);
-        conn.setMaxOpsInvoked(0);
-        conn.setMaxOpsPerformed(0);
-        conn.setPackPDV(true);
+        if (cfg.NOT_ASYNC) {
+            conn.setMaxOpsInvoked(1);
+            conn.setMaxOpsPerformed(1);
+        } else {
+            conn.setMaxOpsInvoked(0);
+            conn.setMaxOpsPerformed(0);
+        }
+        conn.setPackPDV(!cfg.NOT_PACK_PDV);
 
-        conn.setConnectTimeout(CONNECT_TIMEOUT);
-        conn.setRequestTimeout(REQUEST_TIMEOUT);
-        conn.setResponseTimeout(RESPONSE_TIMEOUT);
-        conn.setAcceptTimeout(ACCEPT_TIMEOUT);
-        conn.setReleaseTimeout(RELEASE_TIMEOUT);
-        conn.setSendTimeout(SEND_TIMEOUT);
+        conn.setConnectTimeout(cfg.CONNECT_TIMEOUT);
+        conn.setRequestTimeout(cfg.REQUEST_TIMEOUT);
+        conn.setResponseTimeout(cfg.RESPONSE_TIMEOUT);
+        conn.setAcceptTimeout(cfg.ACCEPT_TIMEOUT);
+        conn.setReleaseTimeout(cfg.RELEASE_TIMEOUT);
+        conn.setSendTimeout(cfg.SEND_TIMEOUT);
+        conn.setIdleTimeout(cfg.IDLE_TIMEOUT);
+        conn.setStoreTimeout(cfg.STORE_TIMEOUT);
 
-        conn.setStoreTimeout(0);
+        conn.setSendBufferSize(cfg.SND_BUFFER);
+        conn.setReceiveBufferSize(cfg.RCV_BUFFER);
+
+        conn.setTcpNoDelay(!cfg.TCP_DELAY);
 
         remote.setTlsProtocols(conn.getTlsProtocols());
         remote.setTlsCipherSuites(conn.getTlsCipherSuites());

@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.rra.dcm.DicomDataReader;
 import org.rra.cstore.NifiStoreSCU;
+import org.rra.dcmconfig.DcmConfig;
 
 import java.io.*;
 import java.util.ArrayList;
@@ -42,6 +43,7 @@ public class StoreScpTest {
     @Test
     public void testProcessor() {
         final int port = Utils.provideRandomPort();
+        final DcmConfig scuConfig = new DcmConfig();
         testRunner.setProperty(StoreScp.PORT, "" + port);
         testRunner.enqueue("TEST");
         testRunner.run(1, false, true);
@@ -50,7 +52,7 @@ public class StoreScpTest {
             dcmObjects.forEach(bytes -> {
                 try (ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(bytes)) {
                     try (BufferedInputStream bis = new BufferedInputStream(byteArrayInputStream)) {
-                        new NifiStoreSCU("localhost", port, "NIFI_SCU", "DCM4NIFI", bis);
+                        new NifiStoreSCU("localhost", port, "NIFI_SCU", "DCM4NIFI", bis, scuConfig);
                     }
                 } catch (Exception e) {
 

@@ -1,12 +1,12 @@
-package org.rra.cfind;
+package org.rra.dcmconfig;
 
-public class NifiFindScuConfig {
-    public enum FIND_LEVEL{
+public class DcmConfig {
+    public enum LEVEL {
         STUDY,
         SERIES,
         IMAGE
     }
-    public FIND_LEVEL QUERY_LEVEL;
+    public LEVEL FIND_LEVEL;
     public boolean NOT_ASYNC = false;
     public boolean NOT_PACK_PDV = false;
     public boolean TCP_DELAY = false;

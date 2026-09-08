@@ -2,7 +2,6 @@ package org.rra.cget;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.nifi.processor.ProcessSession;
-import org.apache.nifi.processor.ProcessSessionFactory;
 import org.apache.nifi.processor.Relationship;
 import org.dcm4che3.data.Attributes;
 import org.dcm4che3.data.Tag;
@@ -17,6 +16,7 @@ import org.dcm4che3.net.service.DicomServiceRegistry;
 import org.dcm4che3.util.SafeClose;
 import org.dcm4che3.util.StreamUtils;
 import org.dcm4che3.util.StringUtils;
+import org.rra.dcmconfig.DcmConfig;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -24,16 +24,17 @@ import java.security.GeneralSecurityException;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.concurrent.*;
-
-import static org.rra.cget.NifiGetScuConfig.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 public class NifiGetScu {
-    public static final GET_LEVEL STUDY_LEVEL = GET_LEVEL.STUDY;
-    public static final GET_LEVEL SERIES_LEVEL = GET_LEVEL.SERIES;
+    public static final DcmConfig.LEVEL STUDY_LEVEL = DcmConfig.LEVEL.STUDY;
+    public static final DcmConfig.LEVEL SERIES_LEVEL = DcmConfig.LEVEL.SERIES;
 
-    private static String[] IVR_LE_FIRST = {
+    private static final String[] IVR_LE_FIRST = {
             UID.ImplicitVRLittleEndian,
             UID.ExplicitVRLittleEndian,
             UID.ExplicitVRBigEndian
@@ -47,17 +48,15 @@ public class NifiGetScu {
     private final int cancelAfter;
     private final int priority;
     private final ProcessSession session;
-    private InformationModel model;
-
+    private final Relationship relationship;
     ExecutorService executorService = Executors.newSingleThreadExecutor();
     ScheduledExecutorService scheduledExecutorService =
             Executors.newSingleThreadScheduledExecutor();
-
+    private InformationModel model;
     private Association as;
-    private final Relationship relationship;
 
 
-    public NifiGetScu(String host, int port, String callingAet, String calledAet, ProcessSession session , Relationship relationship) {
+    public NifiGetScu(String host, int port, String callingAet, String calledAet, ProcessSession session, Relationship relationship, DcmConfig cfg) {
         this.relationship = relationship;
         this.session = session;
 
@@ -71,7 +70,7 @@ public class NifiGetScu {
         remote.setHostname(host);
         remote.setPort(port);
         remote.setHttpProxy(null);
-        configure(conn);
+        configure(conn, cfg);
         remote.setTlsProtocols(conn.getTlsProtocols());
         remote.setTlsCipherSuites(conn.getTlsCipherSuites());
 
@@ -81,6 +80,85 @@ public class NifiGetScu {
         device.setExecutor(executorService);
         device.setScheduledExecutor(scheduledExecutorService);
 
+    }
+
+    private static void configure(Connection conn, DcmConfig cfg) {
+        // -- max-pdulen-rcv
+        // -- max-pdulen-snd
+        // 16378 by default
+        conn.setReceivePDULength(Connection.DEF_MAX_PDU_LENGTH);
+        conn.setSendPDULength(Connection.DEF_MAX_PDU_LENGTH);
+        /*
+         * do not use asynchronous mode;
+         * equivalent to
+         * --max-ops-invoked=1 and
+         * --max-ops-performed=1
+         */
+        if (cfg.NOT_ASYNC) {
+            conn.setMaxOpsInvoked(1);
+            conn.setMaxOpsPerformed(1);
+        } else {
+            conn.setMaxOpsInvoked(0);
+            conn.setMaxOpsPerformed(0);
+        }
+        conn.setPackPDV(!cfg.NOT_PACK_PDV);
+        conn.setConnectTimeout(cfg.CONNECT_TIMEOUT);
+        conn.setRequestTimeout(cfg.REQUEST_TIMEOUT);
+        conn.setAcceptTimeout(cfg.ACCEPT_TIMEOUT);
+        conn.setReleaseTimeout(cfg.RELEASE_TIMEOUT);
+        conn.setSendTimeout(cfg.SEND_TIMEOUT);
+        conn.setStoreTimeout(cfg.STORE_TIMEOUT);
+        conn.setResponseTimeout(cfg.RESPONSE_TIMEOUT);
+
+        conn.setIdleTimeout(cfg.IDLE_TIMEOUT);
+        conn.setSocketCloseDelay(Connection.DEF_SOCKETDELAY);
+        conn.setSendBufferSize(cfg.SND_BUFFER);
+        conn.setReceiveBufferSize(cfg.RCV_BUFFER);
+        conn.setTcpNoDelay(!cfg.TCP_DELAY);
+    }
+
+    private static void configureServiceClass(NifiGetScu that) throws IOException {
+        Properties p = loadProperties("resource:store-tcs.properties", null);
+        Set<Map.Entry<Object, Object>> entrySet = p.entrySet();
+        for (Map.Entry<Object, Object> entry : entrySet)
+            configureStorageSOPClass(that, (String) entry.getKey(), (String) entry.getValue());
+    }
+
+    private static void configureStorageSOPClass(NifiGetScu that, String cuid, String tsuids0) {
+        String[] tsuids1 = StringUtils.split(tsuids0, ';');
+        for (String tsuids2 : tsuids1) {
+            that.addOfferedStorageSOPClass(toUID(cuid), toUIDs(tsuids2));
+        }
+    }
+
+    private static String[] toUIDs(String s) {
+        if (s.equals("*"))
+            return new String[]{"*"};
+
+        String[] uids = StringUtils.split(s, ',');
+        for (int i = 0; i < uids.length; i++)
+            uids[i] = toUID(uids[i]);
+        return uids;
+    }
+
+    private static String toUID(String uid) {
+        uid = uid.trim();
+        return (uid.equals("*") || Character.isDigit(uid.charAt(0)))
+                ? uid
+                : UID.forName(uid);
+    }
+
+    private static Properties loadProperties(String url, Properties p)
+            throws IOException {
+        if (p == null)
+            p = new Properties();
+        InputStream in = StreamUtils.openFileOrURL(url);
+        try {
+            p.load(in);
+        } finally {
+            SafeClose.close(in);
+        }
+        return p;
     }
 
     public void getOnStudyLevel(String studyIUID) throws Exception {
@@ -93,7 +171,7 @@ public class NifiGetScu {
 
     }
 
-    private void doGet(GET_LEVEL level, String studyIUID, String seriesIUID) throws Exception {
+    private void doGet(DcmConfig.LEVEL level, String studyIUID, String seriesIUID) throws Exception {
         if (level == STUDY_LEVEL) {
             addLevel(STUDY_LEVEL.toString());
             this.keys.setString(Tag.StudyInstanceUID, VR.UI, studyIUID);
@@ -135,90 +213,11 @@ public class NifiGetScu {
         keys.setString(Tag.QueryRetrieveLevel, VR.CS, s);
     }
 
-    private static void configure(Connection conn) {
-        // -- max-pdulen-rcv
-        // -- max-pdulen-snd
-        // 16378 by default
-        conn.setReceivePDULength(Connection.DEF_MAX_PDU_LENGTH);
-        conn.setSendPDULength(Connection.DEF_MAX_PDU_LENGTH);
-        /*
-         * do not use asynchronous mode;
-         * equivalent to
-         * --max-ops-invoked=1 and
-         * --max-ops-performed=1
-         */
-        if (NOT_ASYNC) {
-            conn.setMaxOpsInvoked(1);
-            conn.setMaxOpsPerformed(1);
-        } else {
-            conn.setMaxOpsInvoked(0);
-            conn.setMaxOpsPerformed(0);
-        }
-        conn.setPackPDV(!NOT_PACK_PDV);
-        conn.setConnectTimeout(CONNECT_TIMEOUT);
-        conn.setRequestTimeout(REQUEST_TIMEOUT);
-        conn.setAcceptTimeout(ACCEPT_TIMEOUT);
-        conn.setReleaseTimeout(RELEASE_TIMEOUT);
-        conn.setSendTimeout(SEND_TIMEOUT);
-        conn.setStoreTimeout(STORE_TIMEOUT);
-        conn.setResponseTimeout(RESPONSE_TIMEOUT);
-
-        conn.setIdleTimeout(IDLE_TIMEOUT);
-        conn.setSocketCloseDelay(Connection.DEF_SOCKETDELAY);
-        conn.setSendBufferSize(SND_BUFFER);
-        conn.setReceiveBufferSize(RCV_BUFFER);
-        conn.setTcpNoDelay(!TCP_DELAY);
-    }
-
-    private static void configureServiceClass(NifiGetScu that) throws IOException {
-        Properties p = loadProperties("resource:store-tcs.properties", null);
-        Set<Map.Entry<Object, Object>> entrySet = p.entrySet();
-        for (Map.Entry<Object, Object> entry : entrySet)
-            configureStorageSOPClass(that, (String) entry.getKey(), (String) entry.getValue());
-    }
-
-    private static void configureStorageSOPClass(NifiGetScu that, String cuid, String tsuids0) {
-        String[] tsuids1 = StringUtils.split(tsuids0, ';');
-        for (String tsuids2 : tsuids1) {
-            that.addOfferedStorageSOPClass(toUID(cuid), toUIDs(tsuids2));
-        }
-    }
-
     public void addOfferedStorageSOPClass(String cuid, String... tsuids) {
         if (!rq.containsPresentationContextFor(cuid))
             rq.addRoleSelection(new RoleSelection(cuid, false, true));
         rq.addPresentationContext(new PresentationContext(
                 2 * rq.getNumberOfPresentationContexts() + 1, cuid, tsuids));
-    }
-
-    private static String[] toUIDs(String s) {
-        if (s.equals("*"))
-            return new String[]{"*"};
-
-        String[] uids = StringUtils.split(s, ',');
-        for (int i = 0; i < uids.length; i++)
-            uids[i] = toUID(uids[i]);
-        return uids;
-    }
-
-    private static String toUID(String uid) {
-        uid = uid.trim();
-        return (uid.equals("*") || Character.isDigit(uid.charAt(0)))
-                ? uid
-                : UID.forName(uid);
-    }
-
-    private static Properties loadProperties(String url, Properties p)
-            throws IOException {
-        if (p == null)
-            p = new Properties();
-        InputStream in = StreamUtils.openFileOrURL(url);
-        try {
-            p.load(in);
-        } finally {
-            SafeClose.close(in);
-        }
-        return p;
     }
 
     private void open() throws IOException, InterruptedException, IncompatibleConnectionException, GeneralSecurityException {
@@ -263,6 +262,12 @@ public class NifiGetScu {
         }
     }
 
+    private DicomServiceRegistry createServiceRegistry() {
+        DicomServiceRegistry serviceRegistry = new DicomServiceRegistry();
+        serviceRegistry.addDicomService(new NifiCGetCSotreSCP(session, relationship));
+        return serviceRegistry;
+    }
+
     private enum InformationModel {
         PatientRoot(UID.PatientRootQueryRetrieveInformationModelGet, "STUDY"),
         StudyRoot(UID.StudyRootQueryRetrieveInformationModelGet, "STUDY"),
@@ -279,12 +284,6 @@ public class NifiGetScu {
             this.cuid = cuid;
             this.level = level;
         }
-    }
-
-    private DicomServiceRegistry createServiceRegistry() {
-        DicomServiceRegistry serviceRegistry = new DicomServiceRegistry();
-        serviceRegistry.addDicomService(new NifiCGetCSotreSCP(session, relationship));
-        return serviceRegistry;
     }
 
 

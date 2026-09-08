@@ -23,6 +23,7 @@ import org.dcm4che3.net.service.DicomServiceRegistry;
 import org.dcm4che3.util.SafeClose;
 import org.dcm4che3.util.StreamUtils;
 import org.dcm4che3.util.StringUtils;
+import org.rra.dcmconfig.DcmConfig;
 
 import java.io.BufferedOutputStream;
 import java.io.IOException;
@@ -47,8 +48,8 @@ public class NifiStoreScp {
     private CountDownLatch sessionFactorySetSignal;
     private Relationship relationshipSuccess;
 
-    public NifiStoreScp(String host, int port, String calledAET) {
-        init(host, port, calledAET);
+    public NifiStoreScp(String host, int port, String calledAET, DcmConfig cfg) {
+        init(host, port, calledAET, cfg);
     }
 
     public static String[] toUIDs(String s) {
@@ -93,7 +94,7 @@ public class NifiStoreScp {
         return false;
     }
 
-    private void init(String host, int port, String calledAET) {
+    private void init(String host, int port, String calledAET, DcmConfig cfg) {
         Properties p;
         try {
             p = loadProperties("resource:sop-classes.properties", null);
@@ -108,6 +109,9 @@ public class NifiStoreScp {
             //Bind to 0.0.0.0!!!
             conn.setHostname(host);
             conn.setPort(port);
+
+            configure(conn, cfg);
+
             for (String cuid : p.stringPropertyNames()) {
                 String ts = p.getProperty(cuid);
                 TransferCapability tc = new TransferCapability(null,
@@ -121,6 +125,41 @@ public class NifiStoreScp {
         } catch (IOException e) {
             log.error(e.getMessage(), e);
         }
+    }
+
+    private static void configure(Connection conn, DcmConfig cfg) {
+        // -- max-pdulen-rcv
+        // -- max-pdulen-snd
+        // 16378 by default
+        conn.setReceivePDULength(Connection.DEF_MAX_PDU_LENGTH);
+        conn.setSendPDULength(Connection.DEF_MAX_PDU_LENGTH);
+        /*
+         * do not use asynchronous mode;
+         * equivalent to
+         * --max-ops-invoked=1 and
+         * --max-ops-performed=1
+         */
+        if (cfg.NOT_ASYNC) {
+            conn.setMaxOpsInvoked(1);
+            conn.setMaxOpsPerformed(1);
+        } else {
+            conn.setMaxOpsInvoked(0);
+            conn.setMaxOpsPerformed(0);
+        }
+        conn.setPackPDV(!cfg.NOT_PACK_PDV);
+        conn.setConnectTimeout(cfg.CONNECT_TIMEOUT);
+        conn.setRequestTimeout(cfg.REQUEST_TIMEOUT);
+        conn.setAcceptTimeout(cfg.ACCEPT_TIMEOUT);
+        conn.setReleaseTimeout(cfg.RELEASE_TIMEOUT);
+        conn.setSendTimeout(cfg.SEND_TIMEOUT);
+        conn.setStoreTimeout(cfg.STORE_TIMEOUT);
+        conn.setResponseTimeout(cfg.RESPONSE_TIMEOUT);
+
+        conn.setIdleTimeout(cfg.IDLE_TIMEOUT);
+        conn.setSocketCloseDelay(Connection.DEF_SOCKETDELAY);
+        conn.setSendBufferSize(cfg.SND_BUFFER);
+        conn.setReceiveBufferSize(cfg.RCV_BUFFER);
+        conn.setTcpNoDelay(!cfg.TCP_DELAY);
     }
 
     public void start() {

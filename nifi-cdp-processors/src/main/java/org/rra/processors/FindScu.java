@@ -18,7 +18,7 @@ import org.apache.nifi.processor.*;
 import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.util.StandardValidators;
 import org.rra.cfind.NifiFindScu;
-import org.rra.cfind.NifiFindScuConfig;
+import org.rra.dcmconfig.DcmConfig;
 import org.rra.dcm.DicomUtils;
 
 import java.io.BufferedOutputStream;
@@ -31,7 +31,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-import static org.rra.cfind.NifiFindScuConfig.FIND_LEVEL;
+import static org.rra.dcmconfig.DcmConfig.LEVEL;
 
 @InputRequirement(InputRequirement.Requirement.INPUT_REQUIRED)
 @SideEffectFree
@@ -294,32 +294,31 @@ public class FindScu extends AbstractProcessor {
         String remoteHost = context.getProperty(REMOTE_HOST).evaluateAttributeExpressions().getValue();
         int port = context.getProperty(PORT).evaluateAttributeExpressions().asInteger();
 
-        NifiFindScuConfig nifiFindScuConfig = new NifiFindScuConfig();
-        nifiFindScuConfig.NOT_ASYNC = context.getProperty(NOT_ASYNC).asBoolean();
-        nifiFindScuConfig.NOT_PACK_PDV = context.getProperty(NOT_PACK_PDV).asBoolean();
-        nifiFindScuConfig.TCP_DELAY = context.getProperty(TCP_DELAY).asBoolean();
-        nifiFindScuConfig.CONNECT_TIMEOUT = context.getProperty(CONNECT_TIMEOUT).asInteger();
-        nifiFindScuConfig.REQUEST_TIMEOUT = context.getProperty(REQUEST_TIMEOUT).asInteger();
-        nifiFindScuConfig.ACCEPT_TIMEOUT = context.getProperty(ACCEPT_TIMEOUT).asInteger();
-        nifiFindScuConfig.RELEASE_TIMEOUT = context.getProperty(RELEASE_TIMEOUT).asInteger();
-        nifiFindScuConfig.SEND_TIMEOUT = context.getProperty(SEND_TIMEOUT).asInteger();
-        nifiFindScuConfig.STORE_TIMEOUT = context.getProperty(STORE_TIMEOUT).asInteger();
-        nifiFindScuConfig.RESPONSE_TIMEOUT = context.getProperty(RESPONSE_TIMEOUT).asInteger();
-        nifiFindScuConfig.IDLE_TIMEOUT = context.getProperty(IDLE_TIMEOUT).asInteger();
-        nifiFindScuConfig.SND_BUFFER = context.getProperty(SND_BUFFER).asInteger();
-        nifiFindScuConfig.RCV_BUFFER = context.getProperty(RCV_BUFFER).asInteger();
-
+        DcmConfig dcmConfig = new DcmConfig();
+        dcmConfig.NOT_ASYNC = context.getProperty(NOT_ASYNC).asBoolean();
+        dcmConfig.NOT_PACK_PDV = context.getProperty(NOT_PACK_PDV).asBoolean();
+        dcmConfig.TCP_DELAY = context.getProperty(TCP_DELAY).asBoolean();
+        dcmConfig.CONNECT_TIMEOUT = context.getProperty(CONNECT_TIMEOUT).asInteger();
+        dcmConfig.REQUEST_TIMEOUT = context.getProperty(REQUEST_TIMEOUT).asInteger();
+        dcmConfig.ACCEPT_TIMEOUT = context.getProperty(ACCEPT_TIMEOUT).asInteger();
+        dcmConfig.RELEASE_TIMEOUT = context.getProperty(RELEASE_TIMEOUT).asInteger();
+        dcmConfig.SEND_TIMEOUT = context.getProperty(SEND_TIMEOUT).asInteger();
+        dcmConfig.STORE_TIMEOUT = context.getProperty(STORE_TIMEOUT).asInteger();
+        dcmConfig.RESPONSE_TIMEOUT = context.getProperty(RESPONSE_TIMEOUT).asInteger();
+        dcmConfig.IDLE_TIMEOUT = context.getProperty(IDLE_TIMEOUT).asInteger();
+        dcmConfig.SND_BUFFER = context.getProperty(SND_BUFFER).asInteger();
+        dcmConfig.RCV_BUFFER = context.getProperty(RCV_BUFFER).asInteger();
 
         NifiFindScu findSCU;
         String level = context.getProperty(QUERY_LEVEL).evaluateAttributeExpressions().getValue();
 
         if (level.equals(PATSTUDY_LEVEL)) {
-            nifiFindScuConfig.QUERY_LEVEL = FIND_LEVEL.STUDY;
-            findSCU = new NifiFindScu(calling_aet, called_aet, remoteHost, port, nifiFindScuConfig);
+            dcmConfig.FIND_LEVEL = LEVEL.STUDY;
+            findSCU = new NifiFindScu(calling_aet, called_aet, remoteHost, port, dcmConfig);
             findSCU.getQueryFilter().setPatientID(patientID);
         } else if (level.equals(SERIES_LEVEL)) {
-            nifiFindScuConfig.QUERY_LEVEL = FIND_LEVEL.SERIES;
-            findSCU = new NifiFindScu(calling_aet, called_aet, remoteHost, port, nifiFindScuConfig);
+            dcmConfig.FIND_LEVEL = LEVEL.SERIES;
+            findSCU = new NifiFindScu(calling_aet, called_aet, remoteHost, port, dcmConfig);
             if (studyIUID != null) {
                 findSCU.getQueryFilter().setStudyInstanceUID(studyIUID);
                 log.info("StudyInstanceUID set to {}", studyIUID);
@@ -338,8 +337,8 @@ public class FindScu extends AbstractProcessor {
             }
 
         } else if (level.equals(IMAGE_LEVEL)) {
-            nifiFindScuConfig.QUERY_LEVEL = FIND_LEVEL.IMAGE;
-            findSCU = new NifiFindScu(calling_aet, called_aet, remoteHost, port, nifiFindScuConfig);
+            dcmConfig.FIND_LEVEL = LEVEL.IMAGE;
+            findSCU = new NifiFindScu(calling_aet, called_aet, remoteHost, port, dcmConfig);
             findSCU.getQueryFilter().setStudyInstanceUID(patientID);
         } else {
             log.error("# # # No Level is set # # #");
