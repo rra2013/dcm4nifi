@@ -9,9 +9,8 @@ import org.dcm4che3.net.pdu.PresentationContext;
 import org.dcm4che3.util.SafeClose;
 import org.dcm4che3.util.StringUtils;
 
-import javax.xml.transform.Templates;
-import javax.xml.transform.sax.SAXTransformerFactory;
-import java.io.*;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.security.GeneralSecurityException;
 import java.text.DecimalFormat;
 import java.util.EnumSet;
@@ -19,26 +18,20 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.rra.cfind.NifiFindScu.InformationModel.StudyRoot;
-import static org.rra.cfind.NifiFindScuConfig.*;
+
 
 @Slf4j
 public class NifiFindScu {
 
     private static final String[] IVR_LE_FIRST = {UID.ImplicitVRLittleEndian, UID.ExplicitVRLittleEndian, UID.ExplicitVRBigEndian};
-    public static int QUERY_LEVEL_PATIENT_STUDY = 0xAA;
-    public static int QUERY_LEVEL_SERIES = 0xAB;
-    public static int QUERY_LEVEL_IMAGE = 0xAC;
-    private static SAXTransformerFactory saxtf;
     private final Device device = new Device("findscu");
     private final ApplicationEntity applicationEntity;
     private final Connection conn = new Connection();
     private final Connection remote = new Connection();
     private final AAssociateRQ rq = new AAssociateRQ();
     private final Attributes keys = new Attributes();
-    private final AtomicInteger totNumMatches = new AtomicInteger();
     String[] optVals_StudyLevel = {"PatientID", "PatientName", "IssuerOfPatientID", "PatientBirthDate", "PatientSex",
             // Study Attributes
             "StudyInstanceUID", "AccessionNumber", "StudyDate", "StudyDescription", "StudyID", "ModalitiesInStudy", "NumberOfStudyRelatedSeries", "InstitutionName", "ManufacturerModelName", "Manufacturer"};
@@ -63,7 +56,7 @@ public class NifiFindScu {
     private Association as;
     private IResultListener resultListener;
 
-    public NifiFindScu(String callingAET, String calledAET, String host, int port, int queryLevel){
+    public NifiFindScu(String callingAET, String calledAET, String host, int port, NifiFindScuConfig cfg) {
         device.addConnection(conn);
         applicationEntity = new ApplicationEntity(callingAET);
         device.addApplicationEntity(applicationEntity);
@@ -74,24 +67,24 @@ public class NifiFindScu {
         remote.setPort(port);
         remote.setHttpProxy(null);
 
-        configure(conn);
+        configure(conn, cfg);
         remote.setTlsProtocols(conn.getTlsProtocols());
         remote.setTlsCipherSuites(conn.getTlsCipherSuites());
         setCancelAfter(0);
         setPriority(Priority.NORMAL);
 
-        if (queryLevel == QUERY_LEVEL_PATIENT_STUDY){
+        if (cfg.QUERY_LEVEL == NifiFindScuConfig.FIND_LEVEL.STUDY) {
             configureFindSCUForPatStudyLevel();
-        }else if (queryLevel == QUERY_LEVEL_SERIES){
+        } else if (cfg.QUERY_LEVEL == NifiFindScuConfig.FIND_LEVEL.SERIES) {
             configureFindSCUForSeriesLevel();
-        }else if (queryLevel == QUERY_LEVEL_IMAGE){
+        } else if (cfg.QUERY_LEVEL == NifiFindScuConfig.FIND_LEVEL.IMAGE) {
             configureFindSCUForImageLevel();
-        }else{
+        } else {
             configureFindSCUForPatStudyLevel();
         }
     }
 
-    private static void configureKeys(NifiFindScu that, FIND_LEVEL level, String[] optVals) {
+    private static void configureKeys(NifiFindScu that, NifiFindScuConfig.FIND_LEVEL level, String[] optVals) {
 
         addEmptyAttributes(that.getKeys(), optVals);
         that.addLevel(String.valueOf(level));
@@ -176,7 +169,7 @@ public class NifiFindScu {
         that.setInformationModel(model, transferSyntaxesOf(), queryOptionsOf(qo_relational, qo_datetime, qo_fuzzy, qo_timezone));
     }
 
-    private static void configure(Connection conn) {
+    private static void configure(Connection conn, NifiFindScuConfig cfg) {
         // -- max-pdulen-rcv
         // -- max-pdulen-snd
         // 16378 by default
@@ -188,27 +181,27 @@ public class NifiFindScu {
          * --max-ops-invoked=1 and
          * --max-ops-performed=1
          */
-        if (NOT_ASYNC) {
+        if (cfg.NOT_ASYNC) {
             conn.setMaxOpsInvoked(1);
             conn.setMaxOpsPerformed(1);
         } else {
             conn.setMaxOpsInvoked(0);
             conn.setMaxOpsPerformed(0);
         }
-        conn.setPackPDV(!NOT_PACK_PDV);
-        conn.setConnectTimeout(CONNECT_TIMEOUT);
-        conn.setRequestTimeout(REQUEST_TIMEOUT);
-        conn.setAcceptTimeout(ACCEPT_TIMEOUT);
-        conn.setReleaseTimeout(RELEASE_TIMEOUT);
-        conn.setSendTimeout(SEND_TIMEOUT);
-        conn.setStoreTimeout(STORE_TIMEOUT);
-        conn.setResponseTimeout(RESPONSE_TIMEOUT);
+        conn.setPackPDV(!cfg.NOT_PACK_PDV);
+        conn.setConnectTimeout(cfg.CONNECT_TIMEOUT);
+        conn.setRequestTimeout(cfg.REQUEST_TIMEOUT);
+        conn.setAcceptTimeout(cfg.ACCEPT_TIMEOUT);
+        conn.setReleaseTimeout(cfg.RELEASE_TIMEOUT);
+        conn.setSendTimeout(cfg.SEND_TIMEOUT);
+        conn.setStoreTimeout(cfg.STORE_TIMEOUT);
+        conn.setResponseTimeout(cfg.RESPONSE_TIMEOUT);
 
-        conn.setIdleTimeout(IDLE_TIMEOUT);
+        conn.setIdleTimeout(cfg.IDLE_TIMEOUT);
         conn.setSocketCloseDelay(Connection.DEF_SOCKETDELAY);
-        conn.setSendBufferSize(SND_BUFFER);
-        conn.setReceiveBufferSize(RCV_BUFFER);
-        conn.setTcpNoDelay(!TCP_DELAY);
+        conn.setSendBufferSize(cfg.SND_BUFFER);
+        conn.setReceiveBufferSize(cfg.RCV_BUFFER);
+        conn.setTcpNoDelay(!cfg.TCP_DELAY);
     }
 
 
@@ -220,7 +213,7 @@ public class NifiFindScu {
 
         configureServiceClass(this, StudyRoot, false, false, false, false);
 
-        configureKeys(this, FIND_LEVEL.STUDY, optVals_StudyLevel);
+        configureKeys(this, NifiFindScuConfig.FIND_LEVEL.STUDY, optVals_StudyLevel);
 
     }
 
@@ -230,7 +223,7 @@ public class NifiFindScu {
          * For Series Level
          */
         configureServiceClass(this, StudyRoot, true, false, false, false);
-        configureKeys(this, FIND_LEVEL.SERIES, optVals_SeriesLevel);
+        configureKeys(this, NifiFindScuConfig.FIND_LEVEL.SERIES, optVals_SeriesLevel);
     }
 
     private void configureFindSCUForImageLevel() {
@@ -239,7 +232,7 @@ public class NifiFindScu {
          * For Series Level
          */
         configureServiceClass(this, StudyRoot, true, false, false, false);
-        configureKeys(this, FIND_LEVEL.IMAGE, optVals_ImageLevel);
+        configureKeys(this, NifiFindScuConfig.FIND_LEVEL.IMAGE, optVals_ImageLevel);
     }
 
     public final void setPriority(int priority) {
@@ -265,8 +258,6 @@ public class NifiFindScu {
     public final void setCancelAfter(int cancelAfter) {
         this.cancelAfter = cancelAfter;
     }
-
-
 
 
     public Attributes getKeys() {
@@ -332,7 +323,7 @@ public class NifiFindScu {
         this.device.setScheduledExecutor(scheduledExecutorService);
         try {
             open();
-            if (null != success){
+            if (null != success) {
                 success.onConnected(this.remote);
             }
             query();
