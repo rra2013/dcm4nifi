@@ -11,6 +11,7 @@ import org.dcm4che3.data.Attributes;
 import org.dcm4che3.data.Tag;
 import org.dcm4che3.data.UID;
 import org.dcm4che3.data.VR;
+import org.dcm4che3.io.DicomInputStream;
 import org.dcm4che3.io.DicomOutputStream;
 import org.dcm4che3.net.Association;
 import org.dcm4che3.net.PDVInputStream;
@@ -22,8 +23,11 @@ import org.dcm4che3.util.SafeClose;
 
 import java.io.BufferedOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.SocketException;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -55,11 +59,29 @@ public class NifiCGetCSotreSCP extends BasicCStoreSCP {
         FlowFile flowFile = session.create();
         try {
             long t1 = System.nanoTime();
-           try (OutputStream flowFileOutputStream = session.write(flowFile)) {
+            String studyInstanceUID;
+            String seriesInstanceUID;
+            String patientID;
+            String modality;
+            try (OutputStream flowFileOutputStream = session.write(flowFile)) {
                 try(BufferedOutputStream bos = new BufferedOutputStream(flowFileOutputStream)){
                     storeOnlyAttributesTo(bos, data);
                 }
                 log.info("+ + + DICOM Object received -> SOPIUID: {} + + +", iuid);
+               Attributes dicomAttributes;
+               try (InputStream inputStream = session.read(flowFile)) {
+                   dicomAttributes = parse(inputStream);
+               }
+               studyInstanceUID = dicomAttributes.getString(Tag.StudyInstanceUID);
+               seriesInstanceUID = dicomAttributes.getString(Tag.SeriesInstanceUID);
+               patientID = dicomAttributes.getString(Tag.PatientID, "NO-ID");
+               modality = dicomAttributes.getString(Tag.Modality, "OT");
+               log.debug(
+                       "StudyInstanceUID={}, SeriesInstanceUID={}",
+                       studyInstanceUID,
+                       seriesInstanceUID
+               );
+
             } catch (SocketException socketException) {
                 log.error("Socket exception during data transfer", socketException);
                 session.rollback();
@@ -77,6 +99,22 @@ public class NifiCGetCSotreSCP extends BasicCStoreSCP {
                 session.putAttribute(flowFile, "TransferSyntax", tsuid);
                 session.putAttribute(flowFile, "CallingAET", callingAET);
                 session.putAttribute(flowFile, "CalledAET", calledAET);
+                session.putAttribute(flowFile, "StudyInstanceUID", studyInstanceUID);
+                session.putAttribute(flowFile, "SeriesInstanceUID", seriesInstanceUID);
+                session.putAttribute(flowFile, "PatientID", patientID);
+                session.putAttribute(flowFile, "Modality", modality);
+
+                MessageDigest md5 = MessageDigest.getInstance("MD5");
+                byte[] studyUIDhash = md5.digest(studyInstanceUID.getBytes());
+                byte[] seriesUIDhash = md5.digest(seriesInstanceUID.getBytes());
+                String hexSeriesUIDAttr = HexFormat.of().formatHex(seriesUIDhash);
+                String hexStudyUIDAttr = HexFormat.of().formatHex(studyUIDhash);
+                //
+                session.putAttribute(flowFile, "HexStudyIUID", hexStudyUIDAttr);
+                session.putAttribute(flowFile, "HexSeriesIUID", hexSeriesUIDAttr);
+
+                String fileName = flowFile.getAttribute(CoreAttributes.FILENAME.key()) + ".dcm";
+                flowFile = session.putAttribute(flowFile, CoreAttributes.FILENAME.key(), fileName);
                 //Transfer application/dicom
                 flowFile = session.putAttribute(flowFile, CoreAttributes.MIME_TYPE.key(), "application/dicom");
                 final long importNanos = System.nanoTime() - t1;
@@ -97,6 +135,16 @@ public class NifiCGetCSotreSCP extends BasicCStoreSCP {
             throw new DicomServiceException(Status.ProcessingFailure, e);
         }
 
+    }
+
+    private Attributes parse(InputStream in) throws IOException {
+        DicomInputStream din = new DicomInputStream(in);
+        try {
+            din.setIncludeBulkData(DicomInputStream.IncludeBulkData.NO);
+            return din.readDatasetUntilPixelData();
+        } finally {
+            SafeClose.close(in);
+        }
     }
 
     private void storeOnlyAttributesTo(OutputStream outputStream, PDVInputStream data){
