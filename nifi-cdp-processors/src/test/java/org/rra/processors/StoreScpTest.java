@@ -29,7 +29,7 @@ public class StoreScpTest {
     @BeforeAll
     public static void readData() {
         //Get DICOM Files
-        dcmObjects = DataForTest.DCMOBJECTS;
+        dcmObjects = DataForTest.DCMOBJECTS_IVRLE;
         Assertions.assertTrue(dcmObjects.size() > 0);
     }
 

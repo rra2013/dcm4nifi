@@ -7,7 +7,6 @@ import org.apache.nifi.util.*;
 import org.dcm4che3.data.Attributes;
 import org.dcm4che3.data.Sequence;
 import org.dcm4che3.data.Tag;
-import org.dcm4che3.data.UID;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,7 +47,7 @@ public class TestGroovyDICOM {
         FileUtils.copyDirectory(new File("../groovy/lib"), new File(LIB_RESOURCE_LOCATION));
 
         //Get DICOM Files
-        dcmObjects = DataForTest.DCMOBJECTS;
+        dcmObjects = DataForTest.DCMOBJECTS_IVRLE;
         rtObjects = DataForTest.DCM_RT_OBJECTS;
         Assertions.assertTrue(dcmObjects.size() > 0);
         Assertions.assertTrue(rtObjects.size() > 0);

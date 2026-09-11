@@ -2,10 +2,8 @@ package org.rra.processors;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
-import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.groovy.json.internal.Dates;
 import org.apache.nifi.controller.AbstractControllerService;
 import org.apache.nifi.dbcp.DBCPService;
 import org.apache.nifi.processor.exception.ProcessException;
@@ -26,8 +24,6 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -42,7 +38,7 @@ public class PseudonymizerTest {
     @BeforeAll
     public static void readData() {
         //Get DICOM Files
-        dcmObjects = DataForTest.DCMOBJECTS;
+        dcmObjects = DataForTest.DCMOBJECTS_IVRLE;
         rtObjects = DataForTest.DCM_RT_OBJECTS;
         Assertions.assertTrue(dcmObjects.size() > 0);
         Assertions.assertTrue(rtObjects.size() > 0);
