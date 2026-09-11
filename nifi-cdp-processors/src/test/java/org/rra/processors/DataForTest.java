@@ -16,9 +16,9 @@ public class DataForTest {
     private static final String DICOM_PATH_JPLL = "src/test/resources/data/DICOM/ct_JPLL/";
     private static final String DICOM_PATH_MR = "src/test/resources/data/DICOM/mr_rra/";
 
-    private static final String DICOM_PATH_PDF = "/mnt/f/DICOM/pdf/";
-    private static final String DICOM_PATH_SR = "/mnt/f/DICOM/SR/";
-    private static final String DICOM_PATH_RT = "/mnt/f/DICOM/RT/";
+    private static final String DICOM_PATH_PDF = "src/test/resources/data/DICOM/pdfdcm/";
+    private static final String DICOM_PATH_SR = "src/test/resources/data/DICOM/sr/";
+    private static final String DICOM_PATH_RT = "src/test/resources/data/DICOM/rt/";
 
     public static final String DICOM_SERVER_HOST = "localhost";
     public static final String DICOM_SERVER_AET = "DCM4CHEE";

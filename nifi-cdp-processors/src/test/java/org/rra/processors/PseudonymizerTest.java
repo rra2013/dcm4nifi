@@ -288,6 +288,7 @@ public class PseudonymizerTest {
         stmt.execute("insert into TEST_PSEUDONYMIZER (id, pid, prefix, postfix, date_shift) VALUES (0,'4025765337', 'PRE89898BK', '164' , 0)");
         stmt.execute("insert into TEST_PSEUDONYMIZER (id, pid, prefix, postfix, date_shift) VALUES (1,'0008722285', 'PRE89898BK', '165' , 0)");
         stmt.execute("insert into TEST_PSEUDONYMIZER (id, pid, prefix, postfix, date_shift) VALUES (2,'0001900919', 'PRE89898BK', '166' , 0)");
+        stmt.execute("insert into TEST_PSEUDONYMIZER (id, pid, prefix, postfix, date_shift) VALUES (3,'0815', 'PRE89898BK', '167' , 0)");
         runner.setIncomingConnection(true);
         runner.setProperty(Pseudonymizer.SQL_SELECT_QUERY, "SELECT pid, prefix, postfix FROM TEST_PSEUDONYMIZER where pid=?");
         runner.setProperty(Pseudonymizer.RETAIN_TAGS, "SOPInstanceUID,FrameOfReferenceUID");
@@ -341,6 +342,7 @@ public class PseudonymizerTest {
         stmt.execute("create table TEST_PSEUDONYMIZER (id integer not null, pid varchar(45), prefix varchar(50),postfix varchar(45), date_shift integer not null ,constraint my_pk primary key (id))");
         stmt.execute("insert into TEST_PSEUDONYMIZER (id, pid, prefix, postfix, date_shift) VALUES (0,'0001900919', 'PRE89898BK', '164' , 0)");
         stmt.execute("insert into TEST_PSEUDONYMIZER (id, pid, prefix, postfix, date_shift) VALUES (1,'0008722285', 'PRE89898BK', '165' , 0)");
+        stmt.execute("insert into TEST_PSEUDONYMIZER (id, pid, prefix, postfix, date_shift) VALUES (2,'0815', 'PRE89898BK', '167' , 0)");
         runner.setIncomingConnection(true);
         runner.setProperty(Pseudonymizer.SQL_SELECT_QUERY, "SELECT pid, prefix, postfix FROM TEST_PSEUDONYMIZER where pid=?");
         runner.setProperty(Pseudonymizer.RETAIN_TAGS, "ReferencedSOPInstanceUID, SOPInstanceUID");
@@ -467,6 +469,7 @@ public class PseudonymizerTest {
         stmt.execute("create table TEST_PSEUDONYMIZER (id integer not null, pid varchar(45), prefix varchar(50),postfix varchar(45), date_shift integer not null ,constraint my_pk primary key (id))");
         stmt.execute("insert into TEST_PSEUDONYMIZER (id, pid, prefix, postfix, date_shift) VALUES (0,'0001900919', 'PRE89898BK', '164' , 0)");
         stmt.execute("insert into TEST_PSEUDONYMIZER (id, pid, prefix, postfix, date_shift) VALUES (1,'0008722285', 'PRE89898BK', '165' , 0)");
+        stmt.execute("insert into TEST_PSEUDONYMIZER (id, pid, prefix, postfix, date_shift) VALUES (2,'0815', 'PRE89898BK', '167' , 0)");
         runner.setIncomingConnection(true);
         runner.setProperty(Pseudonymizer.SQL_SELECT_QUERY, "SELECT pid, prefix, postfix FROM TEST_PSEUDONYMIZER where pid=?");
         runner.setProperty(Pseudonymizer.RETAIN_TAGS, "FrameOfReferenceUID, ReferencedSOPInstanceUID, SOPInstanceUID, RTReferencedStudySequence, RTReferencedSeriesSequence");

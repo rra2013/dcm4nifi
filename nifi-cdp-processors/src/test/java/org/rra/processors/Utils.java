@@ -29,7 +29,7 @@ public class Utils {
                 if (null != fmi) {
                     String ts = fmi.getString(Tag.TransferSyntaxUID);
                     transfersyntax.append(ts);
-                    log.info("FMI : {} - {}", transfersyntax, f.getName());
+                    log.debug("FMI : {} - {}", transfersyntax, f.getName());
                     fmi = dcm.createFileMetaInformation(fmi.getString(Tag.TransferSyntaxUID));
                 }
                 try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
@@ -61,7 +61,7 @@ public class Utils {
             log.debug("DICOM FIle: {}", file.getAbsolutePath());
             StringBuffer ts = new StringBuffer();
             dcmObjects.add(readDicomFile(file, ts));
-            log.info("Transfersyntax: {}", ts.toString());
+            //log.info("Transfersyntax: {}", ts.toString());
         });
         log.info("Read {} DICOM Files OK.", files.size());
     }
@@ -75,7 +75,7 @@ public class Utils {
             StringBuffer tsuid = new StringBuffer();
             byte[] bytes = readDicomFile(file, tsuid);
             dcmObjects.put(() -> tsuid.toString(), bytes);
-            log.info("Transfersyntax: {}", tsuid);
+            //log.info("Transfersyntax: {}", tsuid);
         });
         log.info("Read {} DICOM Files OK.", files.size());
     }

@@ -110,7 +110,7 @@ public class Dcm2XmlTest {
     @Test
     public void testXSLT() {
         final boolean inclBulk = false;
-        String xslTransformPath = "/opt/dcm4che/etc/dcm2xml/dsr2html.xsl";
+        String xslTransformPath = "src/test/resources/etc/dcm2xml/dsr2html.xsl";
         sr_dcmObjects.forEach(dcmFileArray -> {
             try(ByteArrayInputStream ba = new ByteArrayInputStream(dcmFileArray)){
                 try(BufferedInputStream bif = new BufferedInputStream(ba)){
@@ -129,7 +129,7 @@ public class Dcm2XmlTest {
                 throw new RuntimeException(e);
             }
         });
-        String xslTransformPath_dump = "/opt/dcm4che/etc/dcm2xml/srdump.xsl";
+        String xslTransformPath_dump = "src/test/resources/etc/dcm2xml/srdump.xsl";
         sr_dcmObjects.forEach(dcmFileArray -> {
             try(ByteArrayInputStream ba = new ByteArrayInputStream(dcmFileArray)){
                 try(BufferedInputStream bif = new BufferedInputStream(ba)){
