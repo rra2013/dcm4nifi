@@ -59,7 +59,7 @@ public class Dcm2XmlTest {
         });
 
         testRunner.setProperty(Dcm2Xml.BULK_DATA, Dcm2Xml.NO_BULK_DATA);
-        testRunner.setProperty(Dcm2Xml.XSL_TRANSFORM_PATH, "/opt/dcm4che/etc/dcm2xml/srdump.xsl");
+        testRunner.setProperty(Dcm2Xml.XSL_TRANSFORM_PATH, "src/test/resources/etc/dcm2xml/srdump.xsl");
         dcmObjects.forEach(dcmFileArray -> {
             testRunner.enqueue(dcmFileArray);
             testRunner.run();
@@ -85,7 +85,7 @@ public class Dcm2XmlTest {
         log.info("$ $ $ $ Run DCM2XML XSLT $ $ $ $ $");
         testRunner.setValidateExpressionUsage(false);
         testRunner.setProperty(Dcm2Xml.BULK_DATA, Dcm2Xml.NO_BULK_DATA);
-        testRunner.setProperty(Dcm2Xml.XSL_TRANSFORM_PATH, "/opt/dcm4che/etc/dcm2xml/dsr2html.xsl");
+        testRunner.setProperty(Dcm2Xml.XSL_TRANSFORM_PATH, "src/test/resources/etc/dcm2xml/dsr2html.xsl");
         dcmObjects.forEach(dcmFileArray -> {
             testRunner.enqueue(dcmFileArray);
             testRunner.run();
