@@ -16,6 +16,7 @@ import org.apache.nifi.processor.*;
 import org.apache.nifi.processor.exception.ProcessException;
 import org.dcm4che3.data.UID;
 import org.rra.dcm.Dicom2DicomTranscoder;
+import org.rra.dcm.OpenCvNativeLoader;
 
 import java.io.*;
 import java.util.List;
@@ -101,9 +102,9 @@ public class Dcm2Dcm extends AbstractProcessor {
     }
 
     @OnScheduled
-    protected void start(final ProcessContext context) {
-        final ComponentLog log = getLogger();
-        log.info("+ + + Start {} OK. + + +", getClass().getSimpleName());
+    public void onScheduled() {
+        OpenCvNativeLoader.load();
+        getLogger().info("Native OpenCV library loaded successfully");
     }
 
     @Override
