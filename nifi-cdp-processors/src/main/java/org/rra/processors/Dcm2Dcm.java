@@ -136,7 +136,25 @@ public class Dcm2Dcm extends AbstractProcessor {
             session.transfer(flowFile, REL_SUCCESS);
             log.info("$ $ $ Transcode from [{}] to [{} - {}] $ $ $", ts_orig, transferSyntax, ts_option);
         } catch (Exception e) {
-            log.error(e.getMessage(), e);
+            log.error(
+                    "DICOM transformation failed for {}",
+                    flowFile,
+                    e
+            );
+
+            flowFile = session.putAttribute(
+                    flowFile,
+                    "dcm.error.class",
+                    e.getClass().getName()
+            );
+
+            flowFile = session.putAttribute(
+                    flowFile,
+                    "dcm.error.message",
+                    e.getMessage() != null
+                            ? e.getMessage()
+                            : e.toString()
+            );
             session.transfer(flowFile, REL_FAILURE);
         }
     }
