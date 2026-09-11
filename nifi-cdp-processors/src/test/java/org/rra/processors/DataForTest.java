@@ -12,27 +12,32 @@ import static org.rra.processors.Utils.readDicomFiles;
 
 @Slf4j
 public class DataForTest {
+    private static final String DICOM_PATH_DEF = "src/test/resources/data/DICOM/ct_IVRLE/";
+    private static final String DICOM_PATH_JPLL = "src/test/resources/data/DICOM/ct_JPLL/";
+    private static final String DICOM_PATH_MR = "src/test/resources/data/DICOM/mr_rra/";
 
-    public static final String DICOM_PATH = "/mnt/f/DICOM/CT/ct_IVRLE";
-    public static final String DICOM_PATH_SR = "/mnt/f/DICOM/SR/";
-    public static final String DICOM_PATH_DEF = "/mnt/f/DICOM/CT/ct_IVRLE/";
-    public static final String DICOM_PATH_PDF = "/mnt/f/DICOM/pdf/";
-    public static final String DICOM_PATH_US = "/mnt/f/DICOM/US/40A6C056/0755AF95";
-    public static final String DICOM_PATH_MR = "/mnt/f/DICOM/MR/";
-    public static final String DICOM_PATH_RT = "/mnt/f/DICOM/RT/";
+    private static final String DICOM_PATH_PDF = "/mnt/f/DICOM/pdf/";
+    private static final String DICOM_PATH_SR = "/mnt/f/DICOM/SR/";
+    private static final String DICOM_PATH_RT = "/mnt/f/DICOM/RT/";
+
     public static final String DICOM_SERVER_HOST = "localhost";
     public static final String DICOM_SERVER_AET = "DCM4CHEE";
     public static final String DICOM_SERVER_MOVE_AET = "DCM4MOVE";
     public static final int DICOM_SERVER_PORT = 11112;
     public static final boolean DICOM_INTEGRATION_TESTS = false;
-    public static final List<byte[]> DCMOBJECTS = new ArrayList<>();
+
+    public static final List<byte[]> DCMOBJECTS_IVRLE = new ArrayList<>();
+    public static final List<byte[]> DCMOBJECTS_JPLL = new ArrayList<>();
     public static final List<byte[]> DCM_RT_OBJECTS = new ArrayList<>();
+    public static final List<byte[]> DCM_MR_OBJECTS = new ArrayList<>();
     public static final List<byte[]> SR_OBJECTS = new ArrayList<>();
     public static final List<byte[]> PDF_OBJECTS = new ArrayList<>();
     public static final Map<FileInfo, byte[]> DCMOBJECTS_UNCOMPRESSED =new HashMap<>();
 
     static {
-        readDicomFiles(DCMOBJECTS, DICOM_PATH);
+        readDicomFiles(DCMOBJECTS_IVRLE, DICOM_PATH_DEF);
+        readDicomFiles(DCMOBJECTS_JPLL, DICOM_PATH_JPLL);
+        readDicomFiles(DCM_MR_OBJECTS, DICOM_PATH_MR);
         readDicomFiles(DCM_RT_OBJECTS, DICOM_PATH_RT);
         readDicomFiles(PDF_OBJECTS, DICOM_PATH_PDF);
         readDicomFiles(SR_OBJECTS, DICOM_PATH_SR);

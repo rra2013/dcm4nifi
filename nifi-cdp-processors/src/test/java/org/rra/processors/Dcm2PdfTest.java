@@ -44,9 +44,9 @@ public class Dcm2PdfTest {
         testRunner.assertAllFlowFilesTransferred(REL_SUCCESS, pdf_dcmObjects.size());
         List<MockFlowFile> success = testRunner.getFlowFilesForRelationship(REL_SUCCESS);
         success.forEach(mockFlowFile -> {
-            String attribute = mockFlowFile.getAttribute(CoreAttributes.FILENAME.key());
-            log.info("$ $ $ $ {} $ $ $ $", attribute);
-            Assertions.assertTrue(attribute.endsWith(".pdf"));
+            String fileName = mockFlowFile.getAttribute(CoreAttributes.FILENAME.key());
+            log.info("$ $ $ $ {} $ $ $ $", fileName);
+            Assertions.assertTrue(fileName.endsWith(".pdf"));
         });
     }
         @Test

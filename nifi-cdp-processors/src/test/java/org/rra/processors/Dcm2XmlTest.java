@@ -1,6 +1,5 @@
 package org.rra.processors;
 
-import ca.uhn.hl7v2.util.XMLUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.IOUtils;
 import org.apache.nifi.util.MockFlowFile;
@@ -11,12 +10,10 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.rra.dcm.Dicom2XmlTransformer;
-import org.rra.dcm.DicomUtils;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 
 @Slf4j
@@ -27,7 +24,7 @@ public class Dcm2XmlTest {
     @BeforeAll
     public static void readData() {
         //Get DICOM Files
-        dcmObjects = DataForTest.DCMOBJECTS;
+        dcmObjects = DataForTest.DCMOBJECTS_IVRLE;
         sr_dcmObjects = DataForTest.SR_OBJECTS;
         Assertions.assertTrue(dcmObjects.size() > 0);
         Assertions.assertTrue(sr_dcmObjects.size() > 0);
