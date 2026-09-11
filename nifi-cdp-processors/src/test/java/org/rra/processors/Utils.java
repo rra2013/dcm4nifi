@@ -51,6 +51,11 @@ public class Utils {
         Assertions.assertNotNull(dcmObjects);
 
         File dir = new File(path);
+
+        Assertions.assertTrue(
+                dir.isDirectory(),
+                "DICOM-Verzeichnis nicht gefunden: " + dir.getAbsolutePath()
+        );
         Collection<File> files = FileUtils.listFiles(dir, null, true);
         files.forEach(file -> {
             log.debug("DICOM FIle: {}", file.getAbsolutePath());
