@@ -109,6 +109,65 @@ Please use the `master` branch for the latest stable version.
 
 ---
 
+## Build and Deployment
+
+### Prerequisites
+
+- JDK 21
+- Apache Maven
+- Apache NiFi 2.4
+- Git
+
+Verify that Maven uses Java 21:
+
+```bash
+java -version
+mvn -version
+```
+
+### Build
+
+```bash
+git clone --branch master https://github.com/rra2013/dcm4nifi.git
+cd dcm4nifi
+mvn clean package
+```
+
+The generated NiFi archives are located in the module-specific `target` directories:
+
+```bash
+find . -type f -path "*/target/*.nar"
+```
+
+### Deploy to Apache NiFi
+
+Set the path to your NiFi installation and copy all generated NAR files into its `lib` directory:
+
+```bash
+export NIFI_HOME=/opt/nifi/
+
+find . -type f -path "*/target/*.nar" \
+  -exec sudo install -m 0644 {} "$NIFI_HOME/lib/" \;
+```
+
+Restart NiFi to load the processors:
+
+```bash
+sudo systemctl restart nifi
+sudo systemctl status nifi --no-pager
+```
+
+For a manually managed NiFi installation, use:
+
+```bash
+"$NIFI_HOME/bin/nifi.sh" restart
+```
+
+After startup, the dcm4nifi processors are available in NiFi's **Add Processor** dialog.
+
+> When updating dcm4nifi, remove older versions of its NAR files from `$NIFI_HOME/lib` before restarting NiFi. Do not keep multiple versions of the same extension.
+
+
 ## License
 
 This project is licensed under the MIT License.
