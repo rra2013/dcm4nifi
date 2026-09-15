@@ -7,10 +7,10 @@ import java.util.regex.Pattern;
 public final class RegionMaskParser {
 
     private static final Pattern REGION_PATTERN = Pattern.compile(
-            "\\[\\s*(\\d+)\\s*," +
-                    "\\s*(\\d+)\\s*," +
-                    "\\s*(\\d+)\\s*," +
-                    "\\s*(\\d+)\\s*\\]"
+            "\\[\\s*(\\d+)\\s*,"
+                    + "\\s*(\\d+)\\s*,"
+                    + "\\s*(-?\\d+)\\s*,"
+                    + "\\s*(\\d+)\\s*\\]"
     );
 
     private RegionMaskParser() {

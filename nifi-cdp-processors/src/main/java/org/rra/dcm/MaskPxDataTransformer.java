@@ -316,21 +316,19 @@ public final class MaskPxDataTransformer {
         }
 
         regions.forEach(r -> {
-            int x = r.getX();
+            int x = effectiveX(r);
             int y = r.getY();
-            int width = r.getWidth();
+            int width = effectiveWidth(r, columns);
             int height = r.getHeight();
-
             for (int row = 0; row < height; row++) {
-                int firstPixelOffset =
-                        (y + row) * columns + x;
-
+                int firstPixelOffset = (y + row) * columns + x;
                 for (int column = 0; column < width; column++) {
                     mask.apply(
                             frame,
                             firstPixelOffset + column,
                             bigEndian,
-                            planeSize);
+                            planeSize
+                    );
                 }
             }
         });
@@ -338,17 +336,31 @@ public final class MaskPxDataTransformer {
 
     private void validateRegions(int columns, int rows) {
         regions.forEach(r -> {
-            int x = r.getX();
+            int configuredX = r.getX();
+            int configuredWidth = r.getWidth();
+
+            int x = effectiveX(r);
+            int width = effectiveWidth(r, columns);
+
             int y = r.getY();
-            int width = r.getWidth();
             int height = r.getHeight();
 
-            if (x < 0 || y < 0 || width <= 0 || height <= 0) {
+            /*
+             * width < 0 bedeutet:
+             * x wird ignoriert und die komplette Bildbreite verwendet.
+             */
+            if (configuredWidth == 0
+                    || y < 0
+                    || height <= 0
+                    || (configuredWidth > 0 && configuredX < 0)) {
+
                 throw new IllegalArgumentException(
-                        "Ungültige Region: x=" + x
+                        "Ungültige Region: x=" + configuredX
                                 + ", y=" + y
-                                + ", width=" + width
-                                + ", height=" + height);
+                                + ", width=" + configuredWidth
+                                + ", height=" + height
+                                + ", image=" + columns + "x" + rows
+                );
             }
 
             long right = (long) x + width;
@@ -356,11 +368,15 @@ public final class MaskPxDataTransformer {
 
             if (right > columns || bottom > rows) {
                 throw new IllegalArgumentException(
-                        "Region liegt außerhalb des Bildes: x=" + x
+                        "Region liegt ausserhalb des Bildes: x="
+                                + configuredX
                                 + ", y=" + y
-                                + ", width=" + width
+                                + ", width=" + configuredWidth
                                 + ", height=" + height
-                                + ", image=" + columns + "x" + rows);
+                                + ", effectiveX=" + x
+                                + ", effectiveWidth=" + width
+                                + ", image=" + columns + "x" + rows
+                );
             }
         });
     }
@@ -470,4 +486,20 @@ public final class MaskPxDataTransformer {
             // NiFi schließt den Stream.
         }
     }
+
+    private static int effectiveX(MaskRegion region) {
+        return region.getWidth() < 0
+                ? 0
+                : region.getX();
+    }
+
+    private static int effectiveWidth(
+            MaskRegion region,
+            int imageWidth
+    ) {
+        return region.getWidth() < 0
+                ? imageWidth
+                : region.getWidth();
+    }
+
 }

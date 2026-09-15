@@ -37,7 +37,7 @@ public class MaskPxDataTest {
         log.info("Begin Mask Pixel Test Processor Test");
         testRunner.setValidateExpressionUsage(false);
         //JPLL
-        testRunner.setProperty(MaskPixelData.REGIONS, "[0,0,100,200],[112,0,100,200]");
+        testRunner.setProperty(MaskPixelData.REGIONS, "[0,0,-1,80],[112,0,100,200]");
         testRunner.setProperty(MaskPixelData.COLOR, "0");
         dcmObjectsIVRLE.forEach(dcmFileArray -> {
             HashMap<String, String> attr = new HashMap<>();

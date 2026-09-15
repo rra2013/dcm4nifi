@@ -81,6 +81,7 @@ public class MaskPixelData extends AbstractProcessor {
 
         return (int) color;
     }
+
     private static final Validator REGIONS_VALIDATOR =
             (subject, input, validationContext) -> {
 
@@ -124,17 +125,19 @@ public class MaskPixelData extends AbstractProcessor {
                 }
             };
     public static final PropertyDescriptor REGIONS = new PropertyDescriptor.Builder()
-            .name("regions")
-            .displayName("Regions")
-            .description(
-                    "Rectangular regions in the format "
-                            + "[x,y,width,height]. Multiple regions "
-                            + "are separated by commas, for example "
-                            + "[10,20,100,50],[300,150,80,40]."
-            )
-            .required(true)
-            .addValidator(REGIONS_VALIDATOR)
-            .build();
+                    .name("regions")
+                    .displayName("Regions")
+                    .description(
+                            "Rectangular regions in the format "
+                                    + "[x,y,width,height]. Multiple regions "
+                                    + "are separated by commas, for example "
+                                    + "[10,20,-1,50],[300,150,80,40]. "
+                                    + "A width less than zero masks the entire "
+                                    + "image width and ignores the x coordinate."
+                    )
+                    .required(true)
+                    .addValidator(REGIONS_VALIDATOR)
+                    .build();
 
     public static final PropertyDescriptor COLOR =
             new PropertyDescriptor.Builder()
@@ -181,14 +184,21 @@ public class MaskPixelData extends AbstractProcessor {
         if (flowFile == null) {
             return;
         }
-        String regions = context.getProperty(REGIONS).getValue();
-        int color = context.getProperty(COLOR).asInteger();
-        getLogger().debug(
-                "Masking regions {} using pixel value {}",
-                regions,
-                color
-        );
+
         try {
+            String regions = context.getProperty(REGIONS).getValue();
+            String colorValue = context.getProperty(COLOR)
+                    .evaluateAttributeExpressions(flowFile)
+                    .getValue()
+                    .trim();
+
+            int color = Integer.decode(colorValue);
+            getLogger().debug(
+                    "Masking regions {} using pixel value {}",
+                    regions,
+                    color
+            );
+
             List<MaskRegion> aRegions = RegionMaskParser.parse(regions);
             MaskPxDataTransformer transformer = new MaskPxDataTransformer(
                     color,
@@ -203,20 +213,43 @@ public class MaskPixelData extends AbstractProcessor {
             final long transcodeMillis = TimeUnit.MILLISECONDS.convert(importNanos, TimeUnit.NANOSECONDS);
             session.getProvenanceReporter().modifyContent(flowFile, transcodeMillis);
             session.transfer(flowFile, REL_SUCCESS);
-        } catch (IllegalArgumentException e) {
-            getLogger().error(
-                    "Ungültige Maskierungsregion für {}: {}",
+
+        } catch (NumberFormatException e) {
+            String message =
+                    "Ungültiger Farbwert. Erlaubt sind beispielsweise "
+                            + "'0x330000', '#330000' oder '3342336'.";
+
+            getLogger().error("{} FlowFile: {}", message, flowFile);
+
+            flowFile = session.putAttribute(
                     flowFile,
-                    e.getMessage()
+                    "maskpixel.error",
+                    message
             );
-            flowFile = session.putAttribute(flowFile,"maskpixel.error", e.getMessage());
+
             session.transfer(flowFile, REL_FAILURE);
+
+        } catch (IllegalArgumentException e) {
+            String message = e.getMessage() != null
+                    ? e.getMessage()
+                    : "Ungültige Maskierungsregion";
+
+            getLogger().error("Ungültige Maskierungsregion für {}: {}",flowFile,message);
+
+            flowFile = session.putAttribute(flowFile,"maskpixel.error",message);
+
+            session.transfer(flowFile, REL_FAILURE);
+
         } catch (ProcessException e) {
-            getLogger().error(
-                    "DICOM PixelData konnte für {} nicht maskiert werden",
+            getLogger().error("DICOM PixelData konnte für {} nicht maskiert werden",flowFile,e);
+
+            flowFile = session.putAttribute(
                     flowFile,
-                    e
+                    "maskpixel.error",
+                    "DICOM PixelData konnte nicht maskiert werden: "
+                            + e.getMessage()
             );
+
             session.transfer(flowFile, REL_FAILURE);
         }
     }
