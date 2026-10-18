@@ -22,16 +22,55 @@ import java.util.Set;
 
 @SupportsBatching
 @InputRequirement(InputRequirement.Requirement.INPUT_REQUIRED)
-@SideEffectFree
 @SystemResourceConsideration(resource = SystemResource.CPU)
 
-@Tags({"DICOM", "Store-SCU", "CDP"})
-@CapabilityDescription("DICOM Store-SCU. Store a Flow File with DICOM body to remote destination.")
-@UseCase(description = "DICOM Store-SCU can be used for Sending DICOM Data to remote SCP",
-        inputRequirement = InputRequirement.Requirement.INPUT_REQUIRED)
+@Tags({"DICOM", "C-STORE", "Store-SCU", "CDP"})
 
-@WritesAttributes({@WritesAttribute(attribute = "", description = "")})
-@ReadsAttributes({@ReadsAttribute(attribute = "", description = "")})
+@CapabilityDescription(
+        "Sends DICOM instances from incoming FlowFiles to a remote DICOM Storage SCP " +
+                "using the DICOM C-STORE protocol. " +
+                "Supports dynamic destination configuration through NiFi Expression Language, " +
+                "allowing the remote hostname, port, Called AE Title, and Calling AE Title " +
+                "to be resolved individually for each FlowFile. " +
+                "Provides configurable DICOM association, network timeout, and socket settings. " +
+                "Routes successfully transmitted DICOM instances to 'success' and failed " +
+                "transmissions to 'failure', including diagnostic error attributes."
+)
+
+@UseCase(
+        description = "Transfer DICOM images and other DICOM objects to PACS, " +
+                "VNA, research archives, or other DICOM Storage SCP systems. " +
+                "Dynamically select the destination based on FlowFile attributes, " +
+                "enabling project-specific routing, research workflows, " +
+                "and automated DICOM forwarding.",
+        inputRequirement = InputRequirement.Requirement.INPUT_REQUIRED
+)
+
+@ReadsAttributes({
+        @ReadsAttribute(
+                attribute = "pacs.host",
+                description = "Optional FlowFile attribute used to dynamically resolve the destination hostname."
+        ),
+        @ReadsAttribute(
+                attribute = "pacs.port",
+                description = "Optional FlowFile attribute used to dynamically resolve the destination port."
+        ),
+        @ReadsAttribute(
+                attribute = "pacs.aet",
+                description = "Optional FlowFile attribute used to dynamically resolve the Called AE Title."
+        )
+})
+
+@WritesAttributes({
+        @WritesAttribute(
+                attribute = "dicom.store.error",
+                description = "Error message describing why the DICOM C-STORE operation failed."
+        ),
+        @WritesAttribute(
+                attribute = "dicom.store.error.type",
+                description = "Java exception class name identifying the type of C-STORE failure."
+        )
+})
 public class StoreScu extends AbstractProcessor {
 
     public static final PropertyDescriptor REMOTE_HOST = new PropertyDescriptor.Builder()
@@ -40,7 +79,7 @@ public class StoreScu extends AbstractProcessor {
             .description("The address of the Remote Store-SCP server.")
             .required(false)
             .defaultValue("localhost")
-            .expressionLanguageSupported(ExpressionLanguageScope.ENVIRONMENT)
+            .expressionLanguageSupported(ExpressionLanguageScope.FLOWFILE_ATTRIBUTES)
             .addValidator(StandardValidators.NON_BLANK_VALIDATOR)
             .build();
 
@@ -48,9 +87,10 @@ public class StoreScu extends AbstractProcessor {
             .name("remote-port")
             .displayName("Remote Port")
             .description("The Server Port of DICOM Store-SCP")
+            .description("Supports NiFi Expression Language using FlowFile attributes.")
             .required(true)
             .defaultValue("11115")
-            .expressionLanguageSupported(ExpressionLanguageScope.ENVIRONMENT)
+            .expressionLanguageSupported(ExpressionLanguageScope.FLOWFILE_ATTRIBUTES)
             .addValidator(StandardValidators.PORT_VALIDATOR)
             .build();
 
@@ -58,9 +98,10 @@ public class StoreScu extends AbstractProcessor {
             .name("called-AET")
             .displayName("Called AET")
             .description("The AE Title of the remote SCP")
+            .description("Supports NiFi Expression Language using FlowFile attributes.")
             .defaultValue("DCM4NIFI")
             .required(true)
-            .expressionLanguageSupported(ExpressionLanguageScope.ENVIRONMENT)
+            .expressionLanguageSupported(ExpressionLanguageScope.FLOWFILE_ATTRIBUTES)
             .addValidator(StandardValidators.NON_BLANK_VALIDATOR)
             .build();
 
@@ -68,9 +109,10 @@ public class StoreScu extends AbstractProcessor {
             .name("calling-AET")
             .displayName("Calling AET")
             .description("The Calling AE Title of this SCU")
+            .description("Supports NiFi Expression Language using FlowFile attributes.")
             .defaultValue("NIFI_SCU")
             .required(true)
-            .expressionLanguageSupported(ExpressionLanguageScope.ENVIRONMENT)
+            .expressionLanguageSupported(ExpressionLanguageScope.FLOWFILE_ATTRIBUTES)
             .addValidator(StandardValidators.NON_BLANK_VALIDATOR)
             .build();
 
@@ -248,9 +290,10 @@ public class StoreScu extends AbstractProcessor {
         }
         final ComponentLog log = getLogger();
         log.info("+ + + On Data from AET: {} + + +", flowFile.getAttribute("CallingAET"));
-        String called_aet = context.getProperty(CALLED_AET).evaluateAttributeExpressions().getValue();
-        String calling_aet = context.getProperty(CALLING_AET).evaluateAttributeExpressions().getValue();
-        String remoteHost = context.getProperty(REMOTE_HOST).evaluateAttributeExpressions().getValue();
+        String called_aet = context.getProperty(CALLED_AET).evaluateAttributeExpressions(flowFile).getValue();
+        String calling_aet = context.getProperty(CALLING_AET).evaluateAttributeExpressions(flowFile).getValue();
+        String remoteHost = context.getProperty(REMOTE_HOST).evaluateAttributeExpressions(flowFile).getValue();
+        int port = context.getProperty(PORT).evaluateAttributeExpressions(flowFile).asInteger();
         DcmConfig dcmConfig = new DcmConfig();
         dcmConfig.NOT_ASYNC = context.getProperty(NOT_ASYNC).asBoolean();
         dcmConfig.NOT_PACK_PDV = context.getProperty(NOT_PACK_PDV).asBoolean();
@@ -267,7 +310,7 @@ public class StoreScu extends AbstractProcessor {
         dcmConfig.RCV_BUFFER = context.getProperty(RCV_BUFFER).asInteger();
 
 
-        int port = context.getProperty(PORT).evaluateAttributeExpressions().asInteger();
+
         try {
             try (InputStream inputStream = session.read(flowFile)) {
                 try (BufferedInputStream bis = new BufferedInputStream(inputStream)) {
@@ -276,10 +319,22 @@ public class StoreScu extends AbstractProcessor {
             } catch (Exception e) {
                 throw e;
             }
-            session.getProvenanceReporter().route(flowFile, REL_SUCCESS);
             session.transfer(flowFile, REL_SUCCESS);
         } catch (Exception e) {
-            session.getProvenanceReporter().route(flowFile, REL_FAILURE);
+            log.error("DICOM C-STORE failed to {}:{} AET={}",
+                    remoteHost, port, called_aet, e);
+            flowFile = session.putAttribute(
+                    flowFile,
+                    "dicom.store.error",
+                    e.getMessage() != null
+                            ? e.getMessage()
+                            : e.getClass().getSimpleName()
+            );
+            flowFile = session.putAttribute(
+                    flowFile,
+                    "dicom.store.error.type",
+                    e.getClass().getSimpleName()
+            );
             session.transfer(flowFile, REL_FAILURE);
         }
     }
