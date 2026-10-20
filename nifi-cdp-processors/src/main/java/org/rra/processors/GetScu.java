@@ -18,6 +18,7 @@ import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.util.StandardValidators;
 import org.dcm4che3.data.Attributes;
 import org.dcm4che3.data.Tag;
+import org.dcm4che3.net.Status;
 import org.dcm4che3.util.TagUtils;
 import org.rra.cget.NifiGetScu;
 import org.rra.dcm.DicomUtils;
@@ -41,7 +42,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @UseCase(description = "DICOM C-Get to retrieve data from remote archives. Can be used for DICOM Query/Retrieve process.",
         inputRequirement = InputRequirement.Requirement.INPUT_REQUIRED)
 
-public class GetScu extends AbstractProcessor {
+public class GetScu extends AbstractSessionFactoryProcessor {
     public static final String STUDY_LEVEL = "Study";
     public static final String SERIES_LEVEL = "Series";
     public static final PropertyDescriptor REMOTE_HOST = new PropertyDescriptor.Builder()
@@ -255,12 +256,14 @@ public class GetScu extends AbstractProcessor {
         return this.relationships;
     }
 
+
+
     @Override
     public final List<PropertyDescriptor> getSupportedPropertyDescriptors() {
         return descriptors;
     }
 
-    @Override
+    /*@Override
     public void onTrigger(ProcessContext context, ProcessSession session) throws ProcessException {
         FlowFile flowFile = session.get();
         if (flowFile == null) {
@@ -306,7 +309,17 @@ public class GetScu extends AbstractProcessor {
             }, (t) -> {
                 log.error("Failed to clean up DICOM C-Get process", t);
             });
-            NifiGetScu nifiGetScu = new NifiGetScu(remoteHost, port, calling_aet, called_aet, session, REL_SUCCESS, dcmConfig);
+            NifiGetScu nifiGetScu =
+                    new NifiGetScu(
+                            remoteHost,
+                            port,
+                            calling_aet,
+                            called_aet,
+                            session,
+                            REL_SUCCESS,
+                            dcmConfig,
+                            flowFile.getAttributes()
+                    );
             log.info("Level {}", level);
             if (level.equals(STUDY_LEVEL)) {
                 String studyIUID = readStudyIUID(request);
@@ -365,6 +378,150 @@ public class GetScu extends AbstractProcessor {
             }, (t) -> {
                 log.error("Error during session commit ", t);
             });
+        }
+    }*/
+
+    @Override
+    public void onTrigger(ProcessContext context, ProcessSessionFactory sessionFactory) throws ProcessException {
+        ProcessSession session = sessionFactory.createSession();
+
+        FlowFile flowFile = session.get();
+
+        if (flowFile == null) {
+            session.rollback();
+            return;
+        }
+
+        final ComponentLog log = getLogger();
+        final long startNanos = System.nanoTime();
+
+        try {
+            // Properties mit Attributen des aktuellen FlowFiles auswerten
+            String calledAet = context.getProperty(CALLED_AET)
+                    .evaluateAttributeExpressions(flowFile).getValue();
+
+            String callingAet = context.getProperty(CALLING_AET)
+                    .evaluateAttributeExpressions(flowFile).getValue();
+
+            String remoteHost = context.getProperty(REMOTE_HOST)
+                    .evaluateAttributeExpressions(flowFile).getValue();
+
+            int port = context.getProperty(PORT)
+                    .evaluateAttributeExpressions(flowFile).asInteger();
+
+            String level = context.getProperty(GET_LEVEL)
+                    .evaluateAttributeExpressions(flowFile).getValue();
+
+            DcmConfig cfg = new DcmConfig();
+
+            cfg.NOT_ASYNC = context.getProperty(NOT_ASYNC).asBoolean();
+            cfg.NOT_PACK_PDV = context.getProperty(NOT_PACK_PDV).asBoolean();
+            cfg.TCP_DELAY = context.getProperty(TCP_DELAY).asBoolean();
+            cfg.CONNECT_TIMEOUT = context.getProperty(CONNECT_TIMEOUT).asInteger();
+            cfg.REQUEST_TIMEOUT = context.getProperty(REQUEST_TIMEOUT).asInteger();
+            cfg.ACCEPT_TIMEOUT = context.getProperty(ACCEPT_TIMEOUT).asInteger();
+            cfg.RELEASE_TIMEOUT = context.getProperty(RELEASE_TIMEOUT).asInteger();
+            cfg.SEND_TIMEOUT = context.getProperty(SEND_TIMEOUT).asInteger();
+            cfg.STORE_TIMEOUT = context.getProperty(STORE_TIMEOUT).asInteger();
+            cfg.RESPONSE_TIMEOUT = context.getProperty(RESPONSE_TIMEOUT).asInteger();
+            cfg.IDLE_TIMEOUT = context.getProperty(IDLE_TIMEOUT).asInteger();
+            cfg.SND_BUFFER = context.getProperty(SND_BUFFER).asInteger();
+            cfg.RCV_BUFFER = context.getProperty(RCV_BUFFER).asInteger();
+
+            Attributes request;
+            try (InputStream in = session.read(flowFile)) {
+                request = DicomUtils.readDicomObjectUntilPixelData(in);
+            }
+
+            NifiGetScu getScu = new NifiGetScu(
+                    remoteHost,
+                    port,
+                    callingAet,
+                    calledAet,
+                    sessionFactory,
+                    REL_SUCCESS,
+                    cfg,
+                    flowFile.getAttributes()
+            );
+
+            if (STUDY_LEVEL.equals(level)) {
+                getScu.getOnStudyLevel(readStudyIUID(request));
+
+            } else if (SERIES_LEVEL.equals(level)) {
+                getScu.getOnSeriesLevel(
+                        readStudyIUID(request),
+                        readSeriesIUID(request)
+                );
+
+            } else {
+                throw new IllegalArgumentException(
+                        "Unsupported C-GET level: " + level);
+            }
+
+            int status = getScu.getFinalGetStatus();
+
+            if (status != Status.Success) {
+                throw new IOException(
+                        String.format(
+                                "C-GET not successful: status=0x%04X",
+                                status));
+            }
+
+            long durationMillis = TimeUnit.NANOSECONDS.toMillis(
+                    System.nanoTime() - startNanos);
+
+            String details = "Retrieve_AET:" + calledAet
+                    + " Status:0000";
+
+            // Original-FlowFile beibehalten und routen
+            session.getProvenanceReporter().route(
+                    flowFile,
+                    REL_ORIGINAL,
+                    details,
+                    durationMillis
+            );
+
+            session.transfer(flowFile, REL_ORIGINAL);
+            session.commit();
+
+            log.info(
+                    "C-GET completed successfully: duration={}ms",
+                    durationMillis
+            );
+
+        } catch (Exception e) {
+
+            log.error("C-GET failed", e);
+
+            try {
+                flowFile = session.putAttribute(
+                        flowFile,
+                        "dicom.get.error",
+                        e.getMessage() != null
+                                ? e.getMessage()
+                                : e.getClass().getSimpleName()
+                );
+
+                session.getProvenanceReporter().route(
+                        flowFile, REL_FAILURE);
+
+                session.transfer(flowFile, REL_FAILURE);
+                session.commit();
+
+            } catch (Exception sessionException) {
+                log.error(
+                        "Failed to route C-GET request to failure",
+                        sessionException
+                );
+
+                try {
+                    session.rollback();
+                } catch (Exception rollbackException) {
+                    log.error("Rollback failed", rollbackException);
+                }
+
+                throw new ProcessException(sessionException);
+            }
         }
     }
 

@@ -2,6 +2,7 @@ package org.rra.cget;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.nifi.processor.ProcessSession;
+import org.apache.nifi.processor.ProcessSessionFactory;
 import org.apache.nifi.processor.Relationship;
 import org.dcm4che3.data.Attributes;
 import org.dcm4che3.data.Tag;
@@ -28,6 +29,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Slf4j
 public class NifiGetScu {
@@ -47,8 +49,11 @@ public class NifiGetScu {
     private final Attributes keys = new Attributes();
     private final int cancelAfter;
     private final int priority;
-    private final ProcessSession session;
+    private final ProcessSessionFactory sessionFactory;
+    private final AtomicInteger finalGetStatus = new AtomicInteger(-1);
     private final Relationship relationship;
+    private final Map<String, String> orderAttributes;
+
     ExecutorService executorService = Executors.newSingleThreadExecutor();
     ScheduledExecutorService scheduledExecutorService =
             Executors.newSingleThreadScheduledExecutor();
@@ -56,10 +61,22 @@ public class NifiGetScu {
     private Association as;
 
 
-    public NifiGetScu(String host, int port, String callingAet, String calledAet, ProcessSession session, Relationship relationship, DcmConfig cfg) {
-        this.relationship = relationship;
-        this.session = session;
+    public NifiGetScu(
+            String host,
+            int port,
+            String callingAet,
+            String calledAet,
+            ProcessSessionFactory sessionFactory,
+            Relationship relationship,
+            DcmConfig cfg,
+            Map<String, String> orderAttributes) {
 
+        this.relationship = relationship;
+        this.sessionFactory = sessionFactory;
+        this.orderAttributes = Map.copyOf(orderAttributes);
+
+        // Hier bleibt der Rest deines bisherigen
+        // Konstruktors unverändert:
         device.addConnection(conn);
         applicationEntity = new ApplicationEntity(callingAet);
         device.addApplicationEntity(applicationEntity);
@@ -79,9 +96,7 @@ public class NifiGetScu {
         setInformationModel(InformationModel.StudyRoot, IVR_LE_FIRST, false);
         device.setExecutor(executorService);
         device.setScheduledExecutor(scheduledExecutorService);
-
     }
-
     private static void configure(Connection conn, DcmConfig cfg) {
         // -- max-pdulen-rcv
         // -- max-pdulen-snd
@@ -224,33 +239,56 @@ public class NifiGetScu {
         as = applicationEntity.connect(conn, remote, rq);
     }
 
-    private void retrieve(Attributes keys) throws IOException, InterruptedException {
-        final DimseRSPHandler rspHandler = new DimseRSPHandler(as.nextMessageID()) {
+    private void retrieve(Attributes keys)
+            throws IOException, InterruptedException {
 
-            @Override
-            public void onDimseRSP(Association as, Attributes cmd,
-                                   Attributes data) {
-                super.onDimseRSP(as, cmd, data);
-            }
-        };
+        finalGetStatus.set(-1);
+
+        final DimseRSPHandler rspHandler =
+                new DimseRSPHandler(as.nextMessageID()) {
+
+                    @Override
+                    public void onDimseRSP(
+                            Association association,
+                            Attributes cmd,
+                            Attributes data) {
+
+                        super.onDimseRSP(association, cmd, data);
+
+                        int status = cmd.getInt(Tag.Status, -1);
+
+                        if (status != 0xFF00 && status != 0xFF01) {
+                            finalGetStatus.set(status);
+
+                            log.info(
+                                    "C-GET final response: status=0x{} " +
+                                            "completed={} failed={} warning={} remaining={}",
+                                    Integer.toHexString(status),
+                                    cmd.getInt(Tag.NumberOfCompletedSuboperations, -1),
+                                    cmd.getInt(Tag.NumberOfFailedSuboperations, -1),
+                                    cmd.getInt(Tag.NumberOfWarningSuboperations, -1),
+                                    cmd.getInt(Tag.NumberOfRemainingSuboperations, -1)
+                            );
+                        }
+                    }
+                };
 
         retrieve(keys, rspHandler);
+
         if (cancelAfter > 0) {
-            device.schedule(new Runnable() {
-                                @Override
-                                public void run() {
-                                    try {
-                                        rspHandler.cancel(as);
-                                    } catch (IOException e) {
-                                        e.printStackTrace();
-                                    }
-                                }
-                            },
-                    cancelAfter,
-                    TimeUnit.MILLISECONDS);
+            device.schedule(() -> {
+                try {
+                    rspHandler.cancel(as);
+                } catch (IOException e) {
+                    log.error("C-GET cancel failed", e);
+                }
+            }, cancelAfter, TimeUnit.MILLISECONDS);
         }
     }
 
+    public int getFinalGetStatus() {
+        return finalGetStatus.get();
+    }
     private void retrieve(Attributes keys, DimseRSPHandler rspHandler) throws IOException, InterruptedException {
         as.cget(model.cuid, priority, keys, null, rspHandler);
     }
@@ -263,11 +301,18 @@ public class NifiGetScu {
     }
 
     private DicomServiceRegistry createServiceRegistry() {
-        DicomServiceRegistry serviceRegistry = new DicomServiceRegistry();
-        serviceRegistry.addDicomService(new NifiCGetCSotreSCP(session, relationship));
-        return serviceRegistry;
-    }
+        DicomServiceRegistry registry = new DicomServiceRegistry();
 
+        registry.addDicomService(
+                new NifiCGetCSotreSCP(
+                        sessionFactory,
+                        relationship,
+                        orderAttributes
+                )
+        );
+
+        return registry;
+    }
     private enum InformationModel {
         PatientRoot(UID.PatientRootQueryRetrieveInformationModelGet, "STUDY"),
         StudyRoot(UID.StudyRootQueryRetrieveInformationModelGet, "STUDY"),
