@@ -216,6 +216,22 @@ public class NifiStoreScp {
             String cuid = rq.getString(Tag.AffectedSOPClassUID);
             String iuid = rq.getString(Tag.AffectedSOPInstanceUID);
             String tsuid = pc.getTransferSyntax();
+
+            // C-MOVE Originator Information aus dem C-STORE-RQ
+            final String moveOriginatorAET = rq.getString(
+                    Tag.MoveOriginatorApplicationEntityTitle);
+
+            final int moveOriginatorMessageID = rq.getInt(
+                    Tag.MoveOriginatorMessageID, -1);
+
+            log.info(
+                    "C-STORE received: CallingAET={}, CalledAET={}, "
+                            + "MoveOriginatorAET={}, MoveOriginatorMessageID={}",
+                    as.getCallingAET(),
+                    as.getCalledAET(),
+                    moveOriginatorAET,
+                    moveOriginatorMessageID
+            );
             final ProcessSession processSession;
             try {
                 processSession = createProcessSession();
@@ -262,16 +278,32 @@ public class NifiStoreScp {
                 try {
                     final String callingAET = as.getAAssociateAC().getCallingAET();
                     final String calledAET = as.getAAssociateAC().getCalledAET();
-                    processSession.putAttribute(flowFile, "AffectedSOPClassUID", cuid);
-                    processSession.putAttribute(flowFile, "AffectedSOPInstanceUID", iuid);
-                    processSession.putAttribute(flowFile, "TransferSyntax", tsuid);
-                    processSession.putAttribute(flowFile, "CallingAET", callingAET);
-                    processSession.putAttribute(flowFile, "CalledAET", calledAET);
+                    // Move Originator Attribute nur setzen, wenn vorhanden
+                    if (moveOriginatorAET != null) {
+                        flowFile = processSession.putAttribute(
+                                flowFile,
+                                "dicom.move.originator.aet",
+                                moveOriginatorAET
+                        );
+                    }
+
+                    if (moveOriginatorMessageID >= 0) {
+                        flowFile = processSession.putAttribute(
+                                flowFile,
+                                "dicom.move.originator.message.id",
+                                Integer.toString(moveOriginatorMessageID)
+                        );
+                    }
+                    flowFile = processSession.putAttribute(flowFile, "AffectedSOPClassUID", cuid);
+                    flowFile = processSession.putAttribute(flowFile, "AffectedSOPInstanceUID", iuid);
+                    flowFile = processSession.putAttribute(flowFile, "TransferSyntax", tsuid);
+                    flowFile = processSession.putAttribute(flowFile, "CallingAET", callingAET);
+                    flowFile = processSession.putAttribute(flowFile, "CalledAET", calledAET);
                     // new attributes
-                    processSession.putAttribute(flowFile, "StudyInstanceUID", studyInstanceUID);
-                    processSession.putAttribute(flowFile, "SeriesInstanceUID", seriesInstanceUID);
-                    processSession.putAttribute(flowFile, "PatientID", patientID);
-                    processSession.putAttribute(flowFile, "Modality", modality);
+                    flowFile = processSession.putAttribute(flowFile, "StudyInstanceUID", studyInstanceUID);
+                    flowFile = processSession.putAttribute(flowFile, "SeriesInstanceUID", seriesInstanceUID);
+                    flowFile = processSession.putAttribute(flowFile, "PatientID", patientID);
+                    flowFile = processSession.putAttribute(flowFile, "Modality", modality);
 
                     MessageDigest md5 = MessageDigest.getInstance("MD5");
                     byte[] studyUIDhash = md5.digest(studyInstanceUID.getBytes());
@@ -279,8 +311,8 @@ public class NifiStoreScp {
                     String hexSeriesUIDAttr = HexFormat.of().formatHex(seriesUIDhash);
                     String hexStudyUIDAttr = HexFormat.of().formatHex(studyUIDhash);
                     //
-                    processSession.putAttribute(flowFile, "HexStudyIUID", hexStudyUIDAttr);
-                    processSession.putAttribute(flowFile, "HexSeriesIUID", hexSeriesUIDAttr);
+                    flowFile = processSession.putAttribute(flowFile, "HexStudyIUID", hexStudyUIDAttr);
+                    flowFile = processSession.putAttribute(flowFile, "HexSeriesIUID", hexSeriesUIDAttr);
                     //
                     String fileName = flowFile.getAttribute(CoreAttributes.FILENAME.key()) + ".dcm";
                     flowFile = processSession.putAttribute(flowFile, CoreAttributes.FILENAME.key(), fileName);
