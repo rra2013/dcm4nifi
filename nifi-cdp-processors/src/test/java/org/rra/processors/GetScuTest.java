@@ -27,7 +27,8 @@ public class GetScuTest {
 
     @BeforeEach
     public void init() {
-        testRunner = TestRunners.newTestRunner(GetScu.class);
+     testRunner = TestRunners.newTestRunner(GetScu.class);
+        testRunner.setAllowSynchronousSessionCommits(true);
     }
 
     @Test
