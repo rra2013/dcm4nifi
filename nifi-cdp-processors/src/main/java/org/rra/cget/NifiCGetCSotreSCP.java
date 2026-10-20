@@ -54,6 +54,12 @@ public class NifiCGetCSotreSCP extends BasicCStoreSCP {
             PDVInputStream data,
             Attributes rsp) throws DicomServiceException {
 
+        log.info(
+                "C-GET C-STORE received: SOPInstanceUID={}, TransferSyntax={}",
+                rq.getString(Tag.AffectedSOPInstanceUID),
+                pc.getTransferSyntax()
+        );
+
         final long startNanos = System.nanoTime();
 
         final String cuid = rq.getString(Tag.AffectedSOPClassUID);
@@ -84,7 +90,7 @@ public class NifiCGetCSotreSCP extends BasicCStoreSCP {
             // Erst nach Schliessen des Schreibstreams lesen.
             final Attributes dicomAttributes;
             try (InputStream in = session.read(flowFile);
-                 DicomInputStream din = new DicomInputStream(in)) {
+                 DicomInputStream din = new DicomInputStream(in, tsuid)) {
 
                 din.setIncludeBulkData(
                         DicomInputStream.IncludeBulkData.NO);
@@ -147,8 +153,10 @@ public class NifiCGetCSotreSCP extends BasicCStoreSCP {
                     flowFile, callingAET, durationMillis);
 
             session.transfer(flowFile, relationship);
+            log.info("C-STORE committing SOPInstanceUID={}", iuid);
             session.commit();
             committed = true;
+            log.info("C-STORE committed SOPInstanceUID={}", iuid);
 
             rsp.setInt(Tag.Status, VR.US, Status.Success);
 

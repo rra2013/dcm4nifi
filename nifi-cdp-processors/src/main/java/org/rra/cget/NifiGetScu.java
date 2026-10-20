@@ -261,13 +261,14 @@ public class NifiGetScu {
                             finalGetStatus.set(status);
 
                             log.info(
-                                    "C-GET final response: status=0x{} " +
-                                            "completed={} failed={} warning={} remaining={}",
-                                    Integer.toHexString(status),
+                                    "C-GET final response: status=0x{}, completed={}, failed={}, " +
+                                            "warning={}, remaining={}, errorComment={}",
+                                    String.format("%04X", status),
                                     cmd.getInt(Tag.NumberOfCompletedSuboperations, -1),
                                     cmd.getInt(Tag.NumberOfFailedSuboperations, -1),
                                     cmd.getInt(Tag.NumberOfWarningSuboperations, -1),
-                                    cmd.getInt(Tag.NumberOfRemainingSuboperations, -1)
+                                    cmd.getInt(Tag.NumberOfRemainingSuboperations, -1),
+                                    cmd.getString(Tag.ErrorComment)
                             );
                         }
                     }
@@ -330,6 +331,7 @@ public class NifiGetScu {
             this.level = level;
         }
     }
+
 
 
 }
