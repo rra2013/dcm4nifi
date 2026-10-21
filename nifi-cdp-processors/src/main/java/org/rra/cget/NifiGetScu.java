@@ -18,6 +18,7 @@ import org.dcm4che3.util.SafeClose;
 import org.dcm4che3.util.StreamUtils;
 import org.dcm4che3.util.StringUtils;
 import org.rra.dcmconfig.DcmConfig;
+import org.rra.processors.GetScu;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -30,6 +31,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Slf4j
 public class NifiGetScu {
@@ -51,6 +53,8 @@ public class NifiGetScu {
     private final int priority;
     private final ProcessSessionFactory sessionFactory;
     private final AtomicInteger finalGetStatus = new AtomicInteger(-1);
+    private final AtomicReference<CGetResult> finalGetResult = new AtomicReference<>();
+
     private final Relationship relationship;
     private final Map<String, String> orderAttributes;
 
@@ -243,6 +247,7 @@ public class NifiGetScu {
             throws IOException, InterruptedException {
 
         finalGetStatus.set(-1);
+        finalGetResult.set(null);
 
         final DimseRSPHandler rspHandler =
                 new DimseRSPHandler(as.nextMessageID()) {
@@ -257,20 +262,49 @@ public class NifiGetScu {
 
                         int status = cmd.getInt(Tag.Status, -1);
 
+
                         if (status != 0xFF00 && status != 0xFF01) {
+
+                            int completed = cmd.getInt(
+                                    Tag.NumberOfCompletedSuboperations, -1);
+
+                            int failed = cmd.getInt(
+                                    Tag.NumberOfFailedSuboperations, -1);
+
+                            int warning = cmd.getInt(
+                                    Tag.NumberOfWarningSuboperations, -1);
+
+                            int remaining = cmd.getInt(
+                                    Tag.NumberOfRemainingSuboperations, -1);
+
+                            String errorComment =
+                                    cmd.getString(Tag.ErrorComment);
+
+                            CGetResult result = new CGetResult(
+                                    status,
+                                    completed,
+                                    failed,
+                                    warning,
+                                    remaining,
+                                    errorComment
+                            );
+
+                            finalGetResult.set(result);
                             finalGetStatus.set(status);
 
                             log.info(
-                                    "C-GET final response: status=0x{}, completed={}, failed={}, " +
-                                            "warning={}, remaining={}, errorComment={}",
+                                    "C-GET final response: status=0x{}, " +
+                                            "completed={}, failed={}, warning={}, " +
+                                            "remaining={}, errorComment={}",
                                     String.format("%04X", status),
-                                    cmd.getInt(Tag.NumberOfCompletedSuboperations, -1),
-                                    cmd.getInt(Tag.NumberOfFailedSuboperations, -1),
-                                    cmd.getInt(Tag.NumberOfWarningSuboperations, -1),
-                                    cmd.getInt(Tag.NumberOfRemainingSuboperations, -1),
-                                    cmd.getString(Tag.ErrorComment)
+                                    completed,
+                                    failed,
+                                    warning,
+                                    remaining,
+                                    errorComment
                             );
                         }
+
                     }
                 };
 
@@ -289,6 +323,9 @@ public class NifiGetScu {
 
     public int getFinalGetStatus() {
         return finalGetStatus.get();
+    }
+    public CGetResult getFinalGetResult() {
+        return finalGetResult.get();
     }
     private void retrieve(Attributes keys, DimseRSPHandler rspHandler) throws IOException, InterruptedException {
         as.cget(model.cuid, priority, keys, null, rspHandler);
@@ -332,6 +369,20 @@ public class NifiGetScu {
         }
     }
 
-
+    public record CGetResult(
+            int status,
+            int completed,
+            int failed,
+            int warning,
+            int remaining,
+            String errorComment
+    ) {
+        public boolean isSuccessful() {
+            return status == Status.Success
+                    && failed == 0
+                    && warning == 0
+                    && remaining == 0;
+        }
+    }
 
 }

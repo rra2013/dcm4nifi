@@ -30,8 +30,10 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 
 @SupportsBatching
@@ -428,6 +430,19 @@ public class GetScu extends AbstractSessionFactoryProcessor {
             cfg.SND_BUFFER = context.getProperty(SND_BUFFER).asInteger();
             cfg.RCV_BUFFER = context.getProperty(RCV_BUFFER).asInteger();
 
+            String retrieveId =
+                    flowFile.getAttribute("dcma.retrieve.id");
+
+            if (retrieveId == null || retrieveId.isBlank()) {
+                retrieveId = UUID.randomUUID().toString();
+
+                flowFile = session.putAttribute(
+                        flowFile,
+                        "dcma.retrieve.id",
+                        retrieveId
+                );
+            }
+
             Attributes request;
             try (InputStream in = session.read(flowFile)) {
                 request = DicomUtils.readDicomObjectUntilPixelData(in);
@@ -458,13 +473,57 @@ public class GetScu extends AbstractSessionFactoryProcessor {
                         "Unsupported C-GET level: " + level);
             }
 
-            int status = getScu.getFinalGetStatus();
 
-            if (status != Status.Success) {
+            NifiGetScu.CGetResult result =
+                    getScu.getFinalGetResult();
+
+            if (result == null) {
+                throw new IOException(
+                        "C-GET completed without final DIMSE response");
+            }
+
+            flowFile = session.putAllAttributes(
+                    flowFile,
+                    java.util.Map.of(
+                            "dcma.cget.status",
+                            String.format("%04X", result.status()),
+
+                            "dcma.cget.completed",
+                            String.valueOf(result.completed()),
+
+                            "dcma.cget.failed",
+                            String.valueOf(result.failed()),
+
+                            "dcma.cget.warning",
+                            String.valueOf(result.warning()),
+
+                            "dcma.cget.remaining",
+                            String.valueOf(result.remaining()),
+
+                            "dcma.cget.finished",
+                            "true"
+                    )
+            );
+
+            if (result.errorComment() != null) {
+                flowFile = session.putAttribute(
+                        flowFile,
+                        "dcma.cget.error.comment",
+                        result.errorComment()
+                );
+            }
+
+            if (!result.isSuccessful()) {
                 throw new IOException(
                         String.format(
-                                "C-GET not successful: status=0x%04X",
-                                status));
+                                "C-GET failed: status=0x%04X, " +
+                                        "completed=%d, failed=%d, warning=%d",
+                                result.status(),
+                                result.completed(),
+                                result.failed(),
+                                result.warning()
+                        )
+                );
             }
 
             long durationMillis = TimeUnit.NANOSECONDS.toMillis(
@@ -536,4 +595,5 @@ public class GetScu extends AbstractSessionFactoryProcessor {
         final ComponentLog log = getLogger();
         log.info("+ + + Stop {} OK. + + +", getClass().getSimpleName());
     }
+
 }
