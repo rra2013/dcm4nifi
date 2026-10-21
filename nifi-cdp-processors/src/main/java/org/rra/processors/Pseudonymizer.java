@@ -180,7 +180,7 @@ public class Pseudonymizer extends AbstractProcessor {
                     log.error("Execute SQL select query [{}] routing to failure: {}", selectQuery, e.getMessage());
                     context.yield();
                 }
-                session.putAttribute(flowFile, RESULT_ERROR_MESSAGE, e.getMessage());
+                flowFile = session.putAttribute(flowFile, RESULT_ERROR_MESSAGE, e.getMessage());
                 session.transfer(flowFile, REL_FAILURE);
             }
         }

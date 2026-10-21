@@ -699,6 +699,325 @@ public class PseudonymizerTest {
         System.clearProperty("derby.stream.error.file");
     }
 
+    private TestRunner createPseudonymizer2Runner() {
+        TestRunner testRunner = TestRunners.newTestRunner(Pseudonymizer2.class);
+
+        testRunner.setProperty(
+                Pseudonymizer2.PSEUDO_PID,
+                "${dcma.pseudonym.pid}"
+        );
+
+        testRunner.setProperty(
+                Pseudonymizer2.PSEUDO_NAME,
+                "${dcma.pseudonym.name}"
+        );
+
+        testRunner.setProperty(Pseudonymizer2.DATE_SHIFT, "0");
+
+        return testRunner;
+    }
+
+    @Test
+    public void testPseudonymizer2Success() {
+
+        TestRunner testRunner = createPseudonymizer2Runner();
+
+        Map<String, String> attributes = Map.of(
+                "dcma.pseudonym.pid", "CAIRO-001",
+                "dcma.pseudonym.name", "CAIRO^PATIENT",
+                "dcma.order.id", "test-order-123",
+                "CallingAET", "TEST_RUNNER"
+        );
+
+        testRunner.enqueue(dcmObjects.get(0), attributes);
+        testRunner.run();
+
+        testRunner.assertAllFlowFilesTransferred(
+                Pseudonymizer2.REL_SUCCESS, 1
+        );
+
+        MockFlowFile result = testRunner
+                .getFlowFilesForRelationship(Pseudonymizer2.REL_SUCCESS)
+                .get(0);
+
+        Attributes dcm = DicomUtils.byteArrayToAttributes(
+                result.toByteArray()
+        );
+
+        Assertions.assertEquals(
+                "CAIRO-001",
+                dcm.getString(Tag.PatientID)
+        );
+
+        Assertions.assertEquals(
+                "CAIRO^PATIENT",
+                dcm.getString(Tag.PatientName)
+        );
+
+        Assertions.assertEquals(
+                dcm.getString(Tag.StudyInstanceUID),
+                result.getAttribute("StudyInstanceUID")
+        );
+
+        Assertions.assertEquals(
+                dcm.getString(Tag.SeriesInstanceUID),
+                result.getAttribute("SeriesInstanceUID")
+        );
+
+        Assertions.assertEquals(
+                dcm.getString(Tag.SOPInstanceUID),
+                result.getAttribute("AffectedSOPInstanceUID")
+        );
+
+        result.assertAttributeEquals(
+                "dcma.order.id", "test-order-123"
+        );
+
+        result.assertAttributeEquals(
+                "CallingAET", "TEST_RUNNER"
+        );
+    }
+
+    @Test
+    public void testPseudonymizer2MissingPID() {
+
+        TestRunner testRunner = createPseudonymizer2Runner();
+
+        Map<String, String> attributes = Map.of(
+                "dcma.pseudonym.name", "CAIRO^PATIENT"
+        );
+
+        testRunner.enqueue(dcmObjects.get(0), attributes);
+        testRunner.run();
+
+        testRunner.assertAllFlowFilesTransferred(
+                Pseudonymizer2.REL_FAILURE, 1
+        );
+
+        MockFlowFile failed = testRunner
+                .getFlowFilesForRelationship(Pseudonymizer2.REL_FAILURE)
+                .get(0);
+
+        Assertions.assertNotNull(
+                failed.getAttribute(Pseudonymizer2.RESULT_ERROR_MESSAGE)
+        );
+    }
+
+    @Test
+    public void testPseudonymizer2MissingName() {
+
+        TestRunner testRunner = createPseudonymizer2Runner();
+
+        Map<String, String> attributes = Map.of(
+                "dcma.pseudonym.pid", "CAIRO-001"
+        );
+
+        testRunner.enqueue(dcmObjects.get(0), attributes);
+        testRunner.run();
+
+        testRunner.assertAllFlowFilesTransferred(
+                Pseudonymizer2.REL_FAILURE, 1
+        );
+
+        MockFlowFile failed = testRunner
+                .getFlowFilesForRelationship(Pseudonymizer2.REL_FAILURE)
+                .get(0);
+
+        Assertions.assertNotNull(
+                failed.getAttribute(Pseudonymizer2.RESULT_ERROR_MESSAGE)
+        );
+    }
+
+    @Test
+    public void testPseudonymizer2DateShift() {
+
+        TestRunner testRunner = createPseudonymizer2Runner();
+
+        testRunner.setProperty(
+                Pseudonymizer2.DATE_SHIFT,
+                "${dcma.date.shift}"
+        );
+
+        Map<String, String> attributes = Map.of(
+                "dcma.pseudonym.pid", "CAIRO-001",
+                "dcma.pseudonym.name", "CAIRO^PATIENT",
+                "dcma.date.shift", "10"
+        );
+
+        byte[] input = dcmObjects.get(0);
+
+        Attributes original = DicomUtils.byteArrayToAttributes(input);
+        Date originalDate = original.getDate(Tag.StudyDate);
+
+        Assertions.assertNotNull(originalDate);
+
+        testRunner.enqueue(input, attributes);
+        testRunner.run();
+
+        testRunner.assertAllFlowFilesTransferred(
+                Pseudonymizer2.REL_SUCCESS, 1
+        );
+
+        MockFlowFile result = testRunner
+                .getFlowFilesForRelationship(Pseudonymizer2.REL_SUCCESS)
+                .get(0);
+
+        Attributes anonymized = DicomUtils.byteArrayToAttributes(
+                result.toByteArray()
+        );
+
+        Date shiftedDate = anonymized.getDate(Tag.StudyDate);
+
+        Assertions.assertNotNull(shiftedDate);
+
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTime(originalDate);
+        calendar.add(Calendar.DAY_OF_MONTH, 10);
+
+        Assertions.assertEquals(
+                calendar.getTime(),
+                shiftedDate
+        );
+    }
+
+    @Test
+    public void testPseudonymizer2RetainTags() {
+
+        TestRunner testRunner = createPseudonymizer2Runner();
+
+        testRunner.setProperty(
+                Pseudonymizer2.RETAIN_TAGS,
+                "AccessionNumber"
+        );
+
+        Map<String, String> attributes = Map.of(
+                "dcma.pseudonym.pid", "CAIRO-001",
+                "dcma.pseudonym.name", "CAIRO^PATIENT"
+        );
+
+        byte[] input = dcmObjects.get(0);
+
+        Attributes original = DicomUtils.byteArrayToAttributes(input);
+
+        String originalAccession =
+                original.getString(Tag.AccessionNumber);
+
+        Assertions.assertNotNull(originalAccession);
+
+        testRunner.enqueue(input, attributes);
+        testRunner.run();
+
+        testRunner.assertAllFlowFilesTransferred(
+                Pseudonymizer2.REL_SUCCESS, 1
+        );
+
+        MockFlowFile result = testRunner
+                .getFlowFilesForRelationship(Pseudonymizer2.REL_SUCCESS)
+                .get(0);
+
+        Attributes anonymized = DicomUtils.byteArrayToAttributes(
+                result.toByteArray()
+        );
+
+        Assertions.assertEquals(
+                originalAccession,
+                anonymized.getString(Tag.AccessionNumber)
+        );
+    }
+
+    @Test
+    public void testPseudonymizer2MultipleFlowFiles() {
+
+        TestRunner testRunner = createPseudonymizer2Runner();
+
+        Map<String, String> attributes = Map.of(
+                "dcma.pseudonym.pid", "CAIRO-001",
+                "dcma.pseudonym.name", "CAIRO^PATIENT",
+                "dcma.order.id", "order-123"
+        );
+
+        for (byte[] dcmObject : dcmObjects) {
+            testRunner.enqueue(dcmObject, attributes);
+        }
+
+        testRunner.run(dcmObjects.size());
+
+        testRunner.assertAllFlowFilesTransferred(
+                Pseudonymizer2.REL_SUCCESS,
+                dcmObjects.size()
+        );
+
+        List<MockFlowFile> results =
+                testRunner.getFlowFilesForRelationship(
+                        Pseudonymizer2.REL_SUCCESS
+                );
+
+        for (MockFlowFile result : results) {
+
+            Attributes dcm = DicomUtils.byteArrayToAttributes(
+                    result.toByteArray()
+            );
+
+            Assertions.assertEquals(
+                    "CAIRO-001",
+                    dcm.getString(Tag.PatientID)
+            );
+
+            Assertions.assertEquals(
+                    "CAIRO^PATIENT",
+                    dcm.getString(Tag.PatientName)
+            );
+
+            result.assertAttributeEquals(
+                    "dcma.order.id", "order-123"
+            );
+
+            Assertions.assertNotNull(
+                    result.getAttribute("StudyInstanceUID")
+            );
+
+            Assertions.assertNotNull(
+                    result.getAttribute("SeriesInstanceUID")
+            );
+
+            Assertions.assertNotNull(
+                    result.getAttribute("AffectedSOPInstanceUID")
+            );
+        }
+    }
+
+    @Test
+    public void testPseudonymizer2InvalidDicom() {
+
+        TestRunner testRunner = createPseudonymizer2Runner();
+
+        Map<String, String> attributes = Map.of(
+                "dcma.pseudonym.pid", "CAIRO-001",
+                "dcma.pseudonym.name", "CAIRO^PATIENT"
+        );
+
+        byte[] invalidDicom =
+                "This is not a DICOM file".getBytes(
+                        java.nio.charset.StandardCharsets.UTF_8
+                );
+
+        testRunner.enqueue(invalidDicom, attributes);
+
+        // NiFi TestRunner meldet die ProcessException als AssertionError
+        AssertionError error = Assertions.assertThrows(
+                AssertionError.class,
+                () -> testRunner.run(1, false, true)
+        );
+
+        log.info("Expected processing failure: {}", error.getMessage());
+
+        Assertions.assertEquals(
+                0,
+                testRunner.getFlowFilesForRelationship(
+                        Pseudonymizer2.REL_SUCCESS
+                ).size()
+        );
+    }
 
     class DBCPServiceSimpleImpl extends AbstractControllerService implements DBCPService {
 
@@ -712,7 +1031,7 @@ public class PseudonymizerTest {
             try {
                 Class.forName("org.apache.derby.jdbc.EmbeddedDriver");
                 final Connection con = DriverManager.getConnection("jdbc:derby:" + DB_LOCATION + ";create=true");
-                return Mockito.spy(con);
+                return con;
             } catch (final Exception e) {
                 throw new ProcessException("getConnection failed: " + e);
             }

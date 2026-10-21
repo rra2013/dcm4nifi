@@ -36,6 +36,12 @@ public class Deidentify {
         deidentifier.setDummyValue(tag, vr, value);
     }*/
 
+    public Attributes deidentifyAttributes(Attributes dataset, String retainTags, String pseudoPid, String pseudoName,Integer dateShift) {
+        dataset = deidentifyAttributes(dataset, retainTags, true, dateShift);
+        dataset.setString(Tag.PatientID, VR.LO, pseudoPid);
+        dataset.setString(Tag.PatientName, VR.PN, pseudoName);
+        return dataset;
+    }
     public Attributes deidentifyAttributes(Attributes dataset, String retainTags, boolean remapStSerUIDs, String prefix, String postfix, Integer dateShift) {
         dataset = deidentifyAttributes(dataset, retainTags, remapStSerUIDs, dateShift);
         dataset.setString(Tag.PatientID, VR.LO, prefix+"-"+postfix);

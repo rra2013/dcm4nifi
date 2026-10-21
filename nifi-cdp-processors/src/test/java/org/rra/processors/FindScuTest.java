@@ -11,8 +11,11 @@ import org.junit.jupiter.api.Test;
 import org.rra.cfind.NifiFindScu;
 import org.rra.dcmconfig.DcmConfig;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 import static org.rra.processors.DataForTest.*;
 import static org.rra.processors.FindScu.*;
@@ -36,16 +39,32 @@ public class FindScuTest {
         log.info("$ $ $ $ Run FindScu $ $ $ $ $");
         testRunner.setValidateExpressionUsage(false);
 
+        Map<String, String> attributes = Map.of(
+                "project.id", "CAIRO",
+                "order.id", "test-order-123",
+                "patient.id", "56757"
+        );
         //Patient/study level
         testRunner.setProperty(FindScu.QUERY_LEVEL, PATSTUDY_LEVEL);
         testRunner.setProperty(REMOTE_HOST, DICOM_SERVER_HOST);
         testRunner.setProperty(PORT, Integer.toString(DICOM_SERVER_PORT));
 
-        testRunner.enqueue("56757");//PID von rra fuss
+        testRunner.enqueue(
+                "56757".getBytes(StandardCharsets.UTF_8),
+                attributes
+        );
+
         testRunner.run();
         List<MockFlowFile> success = testRunner.getFlowFilesForRelationship(REL_SUCCESS);
         log.info("Size of Success: {}", success.size());
         testRunner.assertAllFlowFilesTransferred(REL_SUCCESS, 1);//count of studies
+        for (MockFlowFile result : success) {
+            result.assertAttributeEquals("project.id", "CAIRO");
+            result.assertAttributeEquals("order.id", "test-order-123");
+            result.assertAttributeEquals("patient.id", "56757");
+            result.assertAttributeEquals("mime.type", "application/dicom");
+        }
+
         testRunner.clearTransferState();
 
         // Series Level with only StudyIUID as parameter
@@ -108,8 +127,8 @@ public class FindScuTest {
 
         NifiFindScu findSCU = new NifiFindScu("FIND", DICOM_SERVER_AET, DICOM_SERVER_HOST, DICOM_SERVER_PORT, cfg);
         //Pat/Study level
-        final List<Attributes> resultSet = new ArrayList<>();
-
+        final List<Attributes> resultSet =
+                Collections.synchronizedList(new ArrayList<>());
         findSCU.getQueryFilter().setPatientID("56757");
         findSCU.getQueryFilter().setIssuerOfPatientID("HANAU");
         findSCU.doQuery(remote -> {
@@ -157,6 +176,14 @@ public class FindScuTest {
         });
         Assertions.assertEquals(14, resultSet.size());
         resultSet.clear();
+
+        findSCU = new NifiFindScu(
+                "FIND",
+                DICOM_SERVER_AET,
+                DICOM_SERVER_HOST,
+                DICOM_SERVER_PORT,
+                cfg
+        );
 
         findSCU.getQueryFilter().setPatientID("56757");
         findSCU.getQueryFilter().setIssuerOfPatientID("HANAU");

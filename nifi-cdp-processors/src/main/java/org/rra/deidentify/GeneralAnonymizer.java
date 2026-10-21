@@ -76,6 +76,35 @@ public class GeneralAnonymizer {
         return anonym;
     }
 
+    public static Attributes pseudonymize2(InputStream inputStream, OutputStream outputStream,String retaintags, String pseudoPid, String pseudoName, Integer dateShift) throws Exception {
+        final DicomDataReader data = new DicomDataReader(inputStream, retainPixelData);
+        final Attributes attributes = data.getAttributes();
+
+        String pid = attributes.getString(Tag.PatientID);
+        if (null == pid || pid.isEmpty()) {
+            throw new Exception("PID is not found");
+        }
+        final Deidentify deidentify = new Deidentify();
+        final Attributes anonym = deidentify.deidentifyAttributes(
+                attributes,
+                retaintags,
+                pseudoPid,
+                pseudoName,
+               dateShift
+        );
+
+        Attributes fmi = data.getFmi();
+        if (null != fmi) {
+            fmi = anonym.createFileMetaInformation(fmi.getString(Tag.TransferSyntaxUID));
+        }
+        try (DicomOutputStream dos = new DicomOutputStream(outputStream, "1.2.840.10008.1.2.1")) {
+            dos.setEncodingOptions(encOpts);
+            dos.writeDataset(fmi, anonym);
+        }
+        log.info("+ + + Deidentify done + + +");
+        return anonym;
+    }
+
     @FunctionalInterface
     public interface PIDLookup {
         PseudonymLookupData lookup(String pid) throws SQLException;
