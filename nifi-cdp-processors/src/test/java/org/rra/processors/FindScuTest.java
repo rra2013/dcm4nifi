@@ -90,11 +90,11 @@ public class FindScuTest {
         //Image level
         testRunner.setProperty(FindScu.QUERY_LEVEL, IMAGE_LEVEL);
         //StudyIUID and query on image level
-        testRunner.enqueue("1.2.840.113845.11.1000000001900555490.20160718102042.2434233");
+        testRunner.enqueue("1.2.840.113845.11.1000000001900555490.20160718102042.2434233,1.3.12.2.1107.5.2.19.45819.2016071811120879334462944.0.0.0");
         testRunner.run();
         success = testRunner.getFlowFilesForRelationship(REL_SUCCESS);
         log.info("Size of Success: {}", success.size());
-        testRunner.assertAllFlowFilesTransferred(REL_SUCCESS,300);
+        testRunner.assertAllFlowFilesTransferred(REL_SUCCESS,35);
 
     }
 

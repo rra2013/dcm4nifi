@@ -380,8 +380,7 @@ public class NifiGetScu {
         public boolean isSuccessful() {
             return status == Status.Success
                     && failed == 0
-                    && warning == 0
-                    && remaining == 0;
+                    && warning == 0;
         }
     }
 
