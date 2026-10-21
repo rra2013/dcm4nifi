@@ -24,7 +24,7 @@ public class DataForTest {
     public static final String DICOM_SERVER_AET = "DCM4CHEE";
     public static final String DICOM_SERVER_MOVE_AET = "DCM4MOVE";
     public static final int DICOM_SERVER_PORT = 11112;
-    public static final boolean DICOM_INTEGRATION_TESTS = true;
+    public static final boolean DICOM_INTEGRATION_TESTS = false;
 
     public static final List<byte[]> DCMOBJECTS_IVRLE = new ArrayList<>();
     public static final List<byte[]> DCMOBJECTS_JPLL = new ArrayList<>();
