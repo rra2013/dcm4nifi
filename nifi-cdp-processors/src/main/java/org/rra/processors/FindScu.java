@@ -1,3 +1,4 @@
+
 package org.rra.processors;
 
 import org.apache.commons.io.IOUtils;
@@ -25,11 +26,10 @@ import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 
 import static org.rra.dcmconfig.DcmConfig.LEVEL;
 
@@ -274,7 +274,7 @@ public class FindScu extends AbstractProcessor {
         String seriesIUID = null;
         try (InputStream inputStream = session.read(flowFile)) {
             patientID = IOUtils.toString(inputStream, StandardCharsets.UTF_8);
-            if (null == patientID || patientID.equals("")) {
+            if (patientID == null || patientID.isBlank()) {
                 session.transfer(flowFile, REL_FAILURE);
                 return;
             }
@@ -319,17 +319,17 @@ public class FindScu extends AbstractProcessor {
         } else if (level.equals(SERIES_LEVEL)) {
             dcmConfig.FIND_LEVEL = LEVEL.SERIES;
             findSCU = new NifiFindScu(calling_aet, called_aet, remoteHost, port, dcmConfig);
-            if (studyIUID != null) {
+            if (studyIUID != null && !studyIUID.isBlank()) {
                 findSCU.getQueryFilter().setStudyInstanceUID(studyIUID);
                 log.info("StudyInstanceUID set to {}", studyIUID);
             }
 
-            if (seriesIUID != null) {
+            if (seriesIUID != null && !seriesIUID.isBlank()) {
                 findSCU.getQueryFilter().setSeriesInstanceUID(seriesIUID);
                 log.info("SeriesInstanceUID set to {}", seriesIUID);
             }
 
-            if (null == studyIUID && null == seriesIUID) {
+            if (studyIUID == null || studyIUID.isBlank()) {
                 log.info("# # # No Values for the series Level is set # # # studyIUID {}, seriesIUID {}", studyIUID, seriesIUID);
                 log.error("# # # No Values for the series Level is set # # #");
                 session.transfer(flowFile, REL_FAILURE);
@@ -339,48 +339,59 @@ public class FindScu extends AbstractProcessor {
         } else if (level.equals(IMAGE_LEVEL)) {
             dcmConfig.FIND_LEVEL = LEVEL.IMAGE;
             findSCU = new NifiFindScu(calling_aet, called_aet, remoteHost, port, dcmConfig);
-            findSCU.getQueryFilter().setStudyInstanceUID(patientID);
+            if (studyIUID == null || studyIUID.isBlank() || seriesIUID == null || seriesIUID.isBlank()) {
+                log.error("IMAGE level requires StudyInstanceUID,SeriesInstanceUID");
+                session.transfer(flowFile, REL_FAILURE);
+                return;
+            }
+            findSCU.getQueryFilter().setStudyInstanceUID(studyIUID);
+            findSCU.getQueryFilter().setSeriesInstanceUID(seriesIUID);
         } else {
             log.error("# # # No Level is set # # #");
             session.transfer(flowFile, REL_FAILURE);
             return;
         }
 
+        // C-FIND callbacks execute on a dcm4che thread. Do not access ProcessSession there.
+        List<org.dcm4che3.data.Attributes> results = new ArrayList<>();
         try {
-            findSCU.doQuery(remote -> {
-                session.remove(flowFile);
-            }, attributes -> {
-                try {
-                    final long t1 = System.nanoTime();
-                    FlowFile qResItem = session.create();
-                    try (OutputStream outputStream = session.write(qResItem)) {
-                        try (BufferedOutputStream bos = new BufferedOutputStream(outputStream)) {
-                            DicomUtils.copyAttributesToOutput(attributes, bos);
-                        }
-                    } catch (SocketException socketException) {
-                        log.error("Socket exception during data transfer", socketException);
-                        session.rollback();
-                        throw new IOException(socketException.getMessage());
-                    } catch (IOException ioException) {
-                        log.error("IOException during data transfer", ioException);
-                        session.rollback();
-                        throw new IOException(ioException.getMessage());
-                    }
-                    qResItem = session.putAttribute(qResItem, CoreAttributes.MIME_TYPE.key(), "application/dicom");
-                    final long importNanos = System.nanoTime() - t1;
-                    final long importMillis = TimeUnit.MILLISECONDS.convert(importNanos, TimeUnit.NANOSECONDS);
-                    session.getProvenanceReporter().receive(qResItem, called_aet, importMillis);
-                    session.transfer(qResItem, REL_SUCCESS);
-                    session.commitAsync(() -> {
-                        log.debug("Flow File Commit OK.");
-                    });
-                } catch (Exception e) {
-                    session.rollback();
-                    log.error("Process session error. ", e);
+            findSCU.doQuery(null, attributes -> {
+                synchronized (results) {
+                    results.add(new org.dcm4che3.data.Attributes(attributes));
                 }
             });
         } catch (Exception e) {
-            session.getProvenanceReporter().route(flowFile, REL_FAILURE);
+            log.error("DICOM C-FIND failed", e);
+            flowFile = session.putAttribute(flowFile, "dicom.find.error", String.valueOf(e.getMessage()));
+            session.transfer(flowFile, REL_FAILURE);
+            return;
+        }
+
+        // The query has finished. Only now create and transfer FlowFiles on this thread.
+        List<FlowFile> created = new ArrayList<>();
+        try {
+            for (org.dcm4che3.data.Attributes attributes : results) {
+                FlowFile item = session.create(flowFile);
+                created.add(item);
+                item = session.write(item, outputStream -> {
+                    BufferedOutputStream bos = new BufferedOutputStream(outputStream);
+                    DicomUtils.copyAttributesToOutput(attributes, bos);
+                    bos.flush();
+                });
+                created.set(created.size() - 1, item);
+                item = session.putAttribute(item, CoreAttributes.MIME_TYPE.key(), "application/dicom");
+                created.set(created.size() - 1, item);
+            }
+            for (FlowFile item : created) {
+                session.transfer(item, REL_SUCCESS);
+            }
+            session.remove(flowFile);
+        } catch (Exception e) {
+            log.error("Could not create C-FIND result FlowFiles", e);
+            for (FlowFile item : created) {
+                session.remove(item);
+            }
+            flowFile = session.putAttribute(flowFile, "dicom.find.error", String.valueOf(e.getMessage()));
             session.transfer(flowFile, REL_FAILURE);
         }
 

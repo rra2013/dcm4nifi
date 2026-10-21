@@ -19,6 +19,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.rra.cfind.NifiFindScu.InformationModel.StudyRoot;
 
@@ -56,6 +57,7 @@ public class NifiFindScu {
     private OutputStream out;
     private Association as;
     private IResultListener resultListener;
+    private final AtomicInteger finalStatus = new AtomicInteger(-1);
 
     public NifiFindScu(String callingAET, String calledAET, String host, int port, DcmConfig cfg) {
         device.addConnection(conn);
@@ -304,6 +306,8 @@ public class NifiFindScu {
                             e.printStackTrace();
                         }
                     }
+                } else {
+                    finalStatus.set(status);
                 }
             }
         };
@@ -318,6 +322,7 @@ public class NifiFindScu {
 
     public void doQuery(IConnectionSuccess success, IResultListener resultListener) throws Exception {
         this.resultListener = resultListener;
+        finalStatus.set(-1);
         ExecutorService executorService = Executors.newSingleThreadExecutor();
         ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
         this.device.setExecutor(executorService);
@@ -328,8 +333,12 @@ public class NifiFindScu {
                 success.onConnected(this.remote);
             }
             query();
+            as.waitForOutstandingRSP();
+            if (finalStatus.get() != Status.Success) {
+                throw new IOException(String.format("C-FIND final status: 0x%04X", finalStatus.get()));
+            }
         } catch (Exception e) {
-            throw new Exception("Could not open connection. " + e.getMessage());
+            throw new IOException("C-FIND failed", e);
         } finally {
             try {
                 close();
