@@ -17,8 +17,8 @@ public class DicomDataReader {
     private final ElementDictionary dict = ElementDictionary.getStandardElementDictionary();
 
     public DicomDataReader(InputStream source, boolean readPixelData) throws IOException {
-        DicomInputStream dis = new DicomInputStream(source);
-        try {
+
+        try (DicomInputStream dis = new DicomInputStream(source)) {
             dis.setIncludeBulkData(DicomInputStream.IncludeBulkData.URI);
             fmi = dis.getFileMetaInformation();
             if ( readPixelData){
@@ -38,9 +38,6 @@ public class DicomDataReader {
             }
 
             printDebugInfo();
-
-        } finally {
-            dis.close();
         }
     }
 
