@@ -8,8 +8,10 @@ import org.apache.nifi.processor.ProcessSessionFactory;
 import org.apache.nifi.processor.Relationship;
 import org.dcm4che3.data.Attributes;
 import org.dcm4che3.data.Tag;
+import org.dcm4che3.data.UID;
 import org.dcm4che3.data.VR;
 import org.dcm4che3.io.DicomInputStream;
+import org.dcm4che3.io.DicomOutputStream;
 import org.dcm4che3.net.Association;
 import org.dcm4che3.net.PDVInputStream;
 import org.dcm4che3.net.Status;
@@ -54,17 +56,14 @@ public class NifiCGetCSotreSCP extends BasicCStoreSCP {
             PDVInputStream data,
             Attributes rsp) throws DicomServiceException {
 
-        log.info(
-                "C-GET C-STORE received: SOPInstanceUID={}, TransferSyntax={}",
-                rq.getString(Tag.AffectedSOPInstanceUID),
-                pc.getTransferSyntax()
-        );
+        final String cuid =
+                rq.getString(Tag.AffectedSOPClassUID);
 
-        final long startNanos = System.nanoTime();
+        final String iuid =
+                rq.getString(Tag.AffectedSOPInstanceUID);
 
-        final String cuid = rq.getString(Tag.AffectedSOPClassUID);
-        final String iuid = rq.getString(Tag.AffectedSOPInstanceUID);
-        final String tsuid = pc.getTransferSyntax();
+        final String tsuid =
+                pc.getTransferSyntax();
 
         ProcessSession session = null;
         boolean committed = false;
@@ -74,75 +73,38 @@ public class NifiCGetCSotreSCP extends BasicCStoreSCP {
 
             FlowFile flowFile = session.create();
 
+            // Order-Attribute übernehmen
             if (!orderAttributes.isEmpty()) {
                 flowFile = session.putAllAttributes(
                         flowFile, orderAttributes);
             }
 
-            // C-STORE-Datensatz schreiben.
-            // Wie bisher ohne Part-10 File Meta Information.
+            // Genau wie dcm4che:
+            // File Meta Information + empfangenes Dataset
             try (OutputStream out = session.write(flowFile);
                  BufferedOutputStream bos =
-                         new BufferedOutputStream(out)) {
-                data.copyTo(bos);
+                         new BufferedOutputStream(out);
+                 DicomOutputStream dos =
+                         new DicomOutputStream(
+                                 bos, UID.ExplicitVRLittleEndian)) {
+
+                dos.writeFileMetaInformation(
+                        as.createFileMetaInformation(
+                                iuid, cuid, tsuid));
+
+                data.copyTo(dos);
             }
-
-            // Erst nach Schliessen des Schreibstreams lesen.
-            final Attributes dicomAttributes;
-            try (InputStream in = session.read(flowFile);
-                 DicomInputStream din = new DicomInputStream(in, tsuid)) {
-
-                din.setIncludeBulkData(
-                        DicomInputStream.IncludeBulkData.NO);
-
-                dicomAttributes = din.readDatasetUntilPixelData();
-            }
-
-            final String studyUID =
-                    dicomAttributes.getString(Tag.StudyInstanceUID);
-            final String seriesUID =
-                    dicomAttributes.getString(Tag.SeriesInstanceUID);
-
-            log.debug(
-                    "Received DICOM dataset: SOPInstanceUID={}, StudyInstanceUID={}, SeriesInstanceUID={}, TransferSyntax={}",
-                    iuid,
-                    studyUID,
-                    seriesUID,
-                    tsuid
-            );
-
-            if (studyUID == null || seriesUID == null) {
-                throw new IOException(
-                        "Missing StudyInstanceUID or SeriesInstanceUID");
-            }
-
-            final String callingAET = as.getCallingAET();
-            final String calledAET = as.getCalledAET();
 
             Map<String, String> attrs = new HashMap<>();
+
             attrs.put("AffectedSOPClassUID", cuid);
             attrs.put("AffectedSOPInstanceUID", iuid);
             attrs.put("TransferSyntax", tsuid);
-            attrs.put("CallingAET", callingAET);
-            attrs.put("CalledAET", calledAET);
-            attrs.put("StudyInstanceUID", studyUID);
-            attrs.put("SeriesInstanceUID", seriesUID);
-            attrs.put("PatientID",
-                    dicomAttributes.getString(Tag.PatientID, "NO-ID"));
-            attrs.put("Modality",
-                    dicomAttributes.getString(Tag.Modality, "OT"));
+            attrs.put("CallingAET", as.getCallingAET());
+            attrs.put("CalledAET", as.getCalledAET());
 
-            MessageDigest md5 = MessageDigest.getInstance("MD5");
-
-            attrs.put("HexStudyIUID",
-                    HexFormat.of().formatHex(md5.digest(
-                            studyUID.getBytes(StandardCharsets.UTF_8))));
-
-            attrs.put("HexSeriesIUID",
-                    HexFormat.of().formatHex(md5.digest(
-                            seriesUID.getBytes(StandardCharsets.UTF_8))));
-
-            flowFile = session.putAllAttributes(flowFile, attrs);
+            flowFile = session.putAllAttributes(
+                    flowFile, attrs);
 
             flowFile = session.putAttribute(
                     flowFile,
@@ -154,30 +116,25 @@ public class NifiCGetCSotreSCP extends BasicCStoreSCP {
                     CoreAttributes.MIME_TYPE.key(),
                     "application/dicom");
 
-            long durationMillis = TimeUnit.NANOSECONDS.toMillis(
-                    System.nanoTime() - startNanos);
-
-            session.getProvenanceReporter().receive(
-                    flowFile, callingAET, durationMillis);
-
             session.transfer(flowFile, relationship);
-            log.info("C-STORE committing SOPInstanceUID={}", iuid);
+
+            // Erst nach erfolgreichem Commit C-STORE bestätigen
             session.commit();
             committed = true;
-            log.info("C-STORE committed SOPInstanceUID={}", iuid);
 
-            rsp.setInt(Tag.Status, VR.US, Status.Success);
+            rsp.setInt(
+                    Tag.Status,
+                    VR.US,
+                    Status.Success);
 
             log.info(
-                    "C-GET C-STORE success: SOPInstanceUID={}, " +
-                            "StudyInstanceUID={}, SeriesInstanceUID={}, " +
-                            "duration={}ms",
-                    iuid, studyUID, seriesUID, durationMillis);
+                    "C-STORE success: SOPInstanceUID={}, TransferSyntax={}",
+                    iuid, tsuid);
 
         } catch (Exception e) {
 
             log.error(
-                    "C-GET C-STORE failed: SOPInstanceUID={}",
+                    "C-STORE failed: SOPInstanceUID={}",
                     iuid, e);
 
             if (session != null && !committed) {
@@ -185,7 +142,7 @@ public class NifiCGetCSotreSCP extends BasicCStoreSCP {
                     session.rollback();
                 } catch (Exception rollbackException) {
                     log.error(
-                            "Session rollback failed",
+                            "C-STORE rollback failed",
                             rollbackException);
                 }
             }
