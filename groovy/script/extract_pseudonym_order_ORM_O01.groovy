@@ -123,26 +123,10 @@ try {
         String sourcePacs = single("SOURCE_PACS")
         String destinationAet = single("DEST_AET")
         String studyUid = single("STUDY_UID")
-        String allSeriesValue = single("ALL_SERIES")
-
-        if (!(allSeriesValue in ["true", "false"])) {
-            throw new IllegalArgumentException(
-                    "Invalid ALL_SERIES: ${allSeriesValue}"
-            )
-        }
-
-        boolean allSeries =
-                Boolean.parseBoolean(allSeriesValue)
 
         def seriesUids = observations["SERIES_UID"]
 
-        if (allSeries && !seriesUids.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "ALL_SERIES=true but SERIES_UID provided"
-            )
-        }
-
-        if (!allSeries && seriesUids.isEmpty()) {
+        if (seriesUids.isEmpty()) {
             throw new IllegalArgumentException(
                     "No SERIES_UID provided for ${studyUid}"
             )
@@ -160,22 +144,11 @@ try {
                 "dcma.source.pacs"       : sourcePacs,
                 "dcma.destination.aet"   : destinationAet,
                 "dcma.study.uid"         : studyUid,
-                "dcma.all.series"        : allSeries.toString(),
                 "mime.type"              : "text/csv"
         ]
 
-        if (allSeries) {
-
-            // One FlowFile containing only StudyInstanceUID.
-            items << [
-                    content    : studyUid,
-                    attributes : baseAttributes
-            ]
-
-        } else {
-
-            // One FlowFile per Study/Series combination.
-            for (String seriesUid : seriesUids) {
+        // One FlowFile per Study/Series combination.
+        for (String seriesUid : seriesUids) {
 
                 if (!seriesUid?.trim()) {
                     throw new IllegalArgumentException(
@@ -190,7 +163,7 @@ try {
                         ]
                 ]
             }
-        }
+
     }
 
     if (items.isEmpty()) {
