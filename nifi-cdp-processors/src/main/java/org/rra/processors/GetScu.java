@@ -513,6 +513,16 @@ public class GetScu extends AbstractSessionFactoryProcessor {
                 );
             }
 
+            log.info(
+                    "C-GET result: status=0x{}, completed={}, failed={}, warning={}, remaining={}, errorComment={}",
+                    String.format("%04X", result.status()),
+                    result.completed(),
+                    result.failed(),
+                    result.warning(),
+                    result.remaining(),
+                    result.errorComment()
+            );
+
             if (!result.isSuccessful()) {
                 throw new IOException(
                         String.format(

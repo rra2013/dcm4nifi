@@ -103,6 +103,14 @@ public class NifiCGetCSotreSCP extends BasicCStoreSCP {
             final String seriesUID =
                     dicomAttributes.getString(Tag.SeriesInstanceUID);
 
+            log.debug(
+                    "Received DICOM dataset: SOPInstanceUID={}, StudyInstanceUID={}, SeriesInstanceUID={}, TransferSyntax={}",
+                    iuid,
+                    studyUID,
+                    seriesUID,
+                    tsuid
+            );
+
             if (studyUID == null || seriesUID == null) {
                 throw new IOException(
                         "Missing StudyInstanceUID or SeriesInstanceUID");
