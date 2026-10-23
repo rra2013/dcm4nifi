@@ -122,6 +122,8 @@ try {
         String pseudonymName = single("PSEUDONYM_NAME")
         String sourcePacs = single("SOURCE_PACS")
         String destinationAet = single("DEST_AET")
+        String sharepointUser = single("SHAREPOINT_USER")
+        String sharepointEmail = single("SHAREPOINT_EMAIL")
         String studyUid = single("STUDY_UID")
 
         def seriesUids = observations["SERIES_UID"]
@@ -144,6 +146,8 @@ try {
                 "dcma.source.pacs"       : sourcePacs,
                 "dcma.destination.aet"   : destinationAet,
                 "dcma.study.uid"         : studyUid,
+                "dcma.sharepoint.user"  : sharepointUser,
+                "dcma.sharepoint.email" : sharepointEmail,
                 "mime.type"              : "text/csv"
         ]
 
