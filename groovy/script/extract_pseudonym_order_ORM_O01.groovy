@@ -105,11 +105,14 @@ try {
 
         def single = { String key ->
             def values = observations[key]
+                    .collect { it?.trim() }
+                    .findAll { it }
+                    .unique()
 
-            if (values.size() != 1 ||
-                    !values[0]?.trim()) {
+            if (values.size() != 1) {
                 throw new IllegalArgumentException(
-                        "Expected exactly one value for ${key}"
+                        "Expected exactly one distinct value for ${key}, " +
+                                "found ${values.size()}: ${values}"
                 )
             }
 
