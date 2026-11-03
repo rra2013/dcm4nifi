@@ -1,4 +1,3 @@
-
 import groovy.json.JsonOutput
 import org.apache.nifi.processor.io.OutputStreamCallback
 
@@ -31,12 +30,9 @@ try {
 
     String sopClassUid = required("AffectedSOPClassUID")
 
-    if (sopClassUid != "1.2.840.10008.5.1.4.1.1.6.1") {
-        throw new IllegalArgumentException(
-                "Not an Ultrasound Single-frame instance: " +
-                        sopClassUid
-        )
-    }
+    // This processor handles ALL excluded DICOM instances.
+    // SOP Class filtering must be performed upstream.
+    // No restriction to Ultrasound Single-frame.
 
     // Before pseudonymization, this must be the original SOP UID.
     String originalSopUid =
@@ -69,11 +65,12 @@ try {
     String batchGroup = orderId + ":" + retrieveId
 
     Map<String, String> attributes = [
-            "mime.type"          : "application/json",
-            "dcma.callback.type" : "instance-event",
-            "dcma.event.id"      : eventId,
-            "dcma.event.type"    : "INSTANCE_SKIPPED",
-            "dcma.batch.group"   : batchGroup
+            "mime.type"                  : "application/json",
+            "dcma.callback.type"         : "instance-event",
+            "dcma.event.id"              : eventId,
+            "dcma.event.type"            : "INSTANCE_SKIPPED",
+            "dcma.batch.group"           : batchGroup,
+            "dcma.excluded.sop.class.uid": sopClassUid
     ]
 
     callback = session.putAllAttributes(
@@ -83,7 +80,8 @@ try {
 
     session.transfer(callback, REL_SUCCESS)
 
-    // Excluded DICOM must not reach pseudonymizer or ZIP.
+    // Excluded DICOM instance must not reach
+    // pseudonymizer, C-STORE or ZIP packaging.
     session.remove(flowFile)
 
 } catch (Exception e) {
