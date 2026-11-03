@@ -137,7 +137,7 @@ public class NifiGetScu {
     }
 
     private static void configureServiceClass(NifiGetScu that) throws IOException {
-        Properties p = loadProperties("resource:store-tcs.properties", null);
+        Properties p = loadProperties("resource:store-tcs-new.properties", null);
         Set<Map.Entry<Object, Object>> entrySet = p.entrySet();
         for (Map.Entry<Object, Object> entry : entrySet)
             configureStorageSOPClass(that, (String) entry.getKey(), (String) entry.getValue());
