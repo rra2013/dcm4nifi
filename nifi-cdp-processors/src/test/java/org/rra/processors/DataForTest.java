@@ -32,6 +32,7 @@ public class DataForTest {
     public static final List<byte[]> DCM_MR_OBJECTS = new ArrayList<>();
     public static final List<byte[]> SR_OBJECTS = new ArrayList<>();
     public static final List<byte[]> PDF_OBJECTS = new ArrayList<>();
+    public static final Map<FileInfo, byte[]> DCMOBJECTS_COMPRESSED =new HashMap<>();
     public static final Map<FileInfo, byte[]> DCMOBJECTS_UNCOMPRESSED =new HashMap<>();
 
     static {
@@ -41,6 +42,7 @@ public class DataForTest {
         readDicomFiles(DCM_RT_OBJECTS, DICOM_PATH_RT);
         readDicomFiles(PDF_OBJECTS, DICOM_PATH_PDF);
         readDicomFiles(SR_OBJECTS, DICOM_PATH_SR);
+        readDicomFiles(DCMOBJECTS_COMPRESSED, DICOM_PATH_JPLL);
         readDicomFiles(DCMOBJECTS_UNCOMPRESSED, DICOM_PATH_DEF);
     }
 

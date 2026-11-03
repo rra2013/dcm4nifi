@@ -4,19 +4,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.nifi.util.MockFlowFile;
 import org.apache.nifi.util.TestRunner;
 import org.apache.nifi.util.TestRunners;
-import org.dcm4che3.data.Attributes;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.rra.dcm.Dicom2JpegTransformer;
-import org.rra.dcm.DicomUtils;
 
-import javax.imageio.ImageIO;
-import javax.imageio.stream.FileImageOutputStream;
-import javax.imageio.stream.ImageOutputStream;
-import javax.imageio.stream.MemoryCacheImageOutputStream;
-import java.io.*;
 import java.util.*;
 
 import static org.rra.processors.Dcm2Jpeg.*;
@@ -35,7 +27,7 @@ public class Dcm2JpegTest {
     @BeforeAll
     public static void readData() {
         //Get DICOM Files
-        dcmObjects = DataForTest.DCMOBJECTS_UNCOMPRESSED;
+        dcmObjects = DataForTest.DCMOBJECTS_COMPRESSED;
         Assertions.assertTrue(dcmObjects.size() > 0);
     }
 

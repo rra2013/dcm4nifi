@@ -103,8 +103,23 @@ public class Dcm2Dcm extends AbstractProcessor {
 
     @OnScheduled
     public void onScheduled() {
-        OpenCvNativeLoader.load();
-        getLogger().info("Native OpenCV library loaded successfully");
+        try {
+            OpenCvNativeLoader.load();
+
+            String buildInfo =
+                    org.opencv.core.Core.getBuildInformation();
+
+            getLogger().info(
+                    "OpenCV successfully initialized. Version={}, library={}, buildInfoLength={}",
+                    org.opencv.core.Core.VERSION,
+                    OpenCvNativeLoader.getExtractedLibrary(),
+                    buildInfo.length()
+            );
+
+        } catch (Exception | LinkageError e) {
+            getLogger().error("OpenCV initialization failed", e);
+            throw new ProcessException("OpenCV initialization failed", e);
+        }
     }
 
     @Override
