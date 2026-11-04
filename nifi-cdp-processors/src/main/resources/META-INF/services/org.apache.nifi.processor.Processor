@@ -21,3 +21,4 @@ org.rra.processors.Xml2HL7
 org.rra.processors.Pseudonymizer
 org.rra.processors.Pseudonymizer2
 org.rra.processors.MaskPixelData
+org.rra.processors.MaskMultiFrameUS
