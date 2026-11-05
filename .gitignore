@@ -37,3 +37,5 @@ build/
 ### Mac OS ###
 .DS_Store
 /token.txt
+/.idea/remote-targets.xml
+/nifi-cdp-processors/id_file
