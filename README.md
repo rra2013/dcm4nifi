@@ -105,7 +105,7 @@ This toolkit enables healthcare organizations to securely unlock the value of me
 
 ## Important
 
-Please use the `master` branch for the latest stable version.
+Please use the `main` branch for the latest stable version.
 
 ---
 
@@ -128,7 +128,7 @@ mvn -version
 ### Build
 
 ```bash
-git clone --branch master https://github.com/rra2013/dcm4nifi.git
+git clone --branch main https://github.com/rra2013/dcm4nifi.git
 cd dcm4nifi
 mvn clean package
 ```
