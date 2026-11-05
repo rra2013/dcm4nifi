@@ -22,7 +22,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -68,8 +67,6 @@ public final class MaskMultiFrameUSTransformer {
     static final String CLEAN_PIXEL_DATA_CODE_VALUE = "113101";
     static final String CLEAN_PIXEL_DATA_CODE_MEANING = "Clean Pixel Data Option";
 
-    /** Obergrenze für den Header vor PixelData (mark/reset im Eingang). */
-    private static final int HEADER_MARK_LIMIT = 64 * 1024 * 1024;
     private static final int IO_BUFFER = 1 << 16;
 
     private static final Set<String> SUPPORTED_TRANSFER_SYNTAXES = Set.of(
@@ -192,29 +189,23 @@ public final class MaskMultiFrameUSTransformer {
      * weiterhin dem Aufrufer.
      */
     public Result transform(InputStream input, OutputStream output) throws IOException {
-        BufferedInputStream in = new BufferedInputStream(new NonClosingInputStream(input), IO_BUFFER);
-        in.mark(HEADER_MARK_LIMIT);
-        String sourceTs;
-        try (DicomInputStream dis = new DicomInputStream(new NonMarkingInputStream(in))) {
-            dis.readFileMetaInformation();
-            Attributes dataset = dis.readDatasetUntilPixelData();
-            sourceTs = validate(dis, dataset);
-        }
-        try {
-            in.reset();
-        } catch (IOException e) {
-            throw new IOException("DICOM-Header vor PixelData ist grösser als "
-                    + HEADER_MARK_LIMIT / (1024 * 1024) + " MB", e);
-        }
+        // Der Header wird genau einmal gelesen. Er kann sehr gross sein
+        // (z.B. private Rohdaten von Ultraschallgeräten vor PixelData),
+        // daher kein mark/reset mit fester Obergrenze.
+        DicomInputStream dis = new DicomInputStream(
+                new BufferedInputStream(new NonClosingInputStream(input), IO_BUFFER));
+        Attributes fmi = dis.readFileMetaInformation();
+        Attributes dataset = dis.readDatasetUntilPixelData();
+        String sourceTs = validate(dis, dataset);
         boolean lossy = TransferSyntaxType.isLossyCompression(sourceTs);
         String targetTs = lossy ? lossyOutput.transferSyntax(sourceTs) : sourceTs;
 
         OutputStream out = new BufferedOutputStream(new NonClosingOutputStream(output), IO_BUFFER);
         Result result;
         if (STREAMING_TRANSFER_SYNTAXES.contains(sourceTs) && STREAMING_TRANSFER_SYNTAXES.contains(targetTs)) {
-            result = transformStreaming(in, out, targetTs);
+            result = transformStreaming(dis, dataset, sourceTs, out, targetTs);
         } else {
-            result = transformViaTempFiles(in, out);
+            result = transformViaTempFiles(dis, fmi, dataset, sourceTs, out);
         }
         out.flush();
         return result;
@@ -307,11 +298,8 @@ public final class MaskMultiFrameUSTransformer {
     // Ein-Durchlauf-Pfad
     // ------------------------------------------------------------------
 
-    private Result transformStreaming(InputStream in, OutputStream out, String targetTs) throws IOException {
-        DicomInputStream dis = new DicomInputStream(new NonMarkingInputStream(in));
-        dis.readFileMetaInformation();
-        Attributes dataset = dis.readDatasetUntilPixelData();
-        String sourceTs = validate(dis, dataset);
+    private Result transformStreaming(DicomInputStream dis, Attributes dataset, String sourceTs,
+                                      OutputStream out, String targetTs) throws IOException {
 
         int rows = dataset.getInt(Tag.Rows, 0);
         int columns = dataset.getInt(Tag.Columns, 0);
@@ -565,7 +553,8 @@ public final class MaskMultiFrameUSTransformer {
     // Fallback über dcm4che und temporäre Dateien
     // ------------------------------------------------------------------
 
-    private Result transformViaTempFiles(InputStream input, OutputStream output) throws IOException {
+    private Result transformViaTempFiles(DicomInputStream dis, Attributes fmi, Attributes dataset,
+                                         String sourceTs, OutputStream output) throws IOException {
         List<File> tempFiles = new ArrayList<>();
         try {
             File source = newTempFile(tempFiles, "source");
@@ -573,14 +562,8 @@ public final class MaskMultiFrameUSTransformer {
             File masked = newTempFile(tempFiles, "masked");
             File encoded = newTempFile(tempFiles, "encoded");
 
-            Files.copy(input, source.toPath(), StandardCopyOption.REPLACE_EXISTING);
-            SourceInfo info;
-            try (DicomInputStream dis = new DicomInputStream(source)) {
-                dis.readFileMetaInformation();
-                Attributes dataset = dis.readDatasetUntilPixelData();
-                String ts = validate(dis, dataset);
-                info = sourceInfo(dataset, ts, source.length() - dis.getPosition());
-            }
+            long pixelDataBytes = spool(dis, fmi, dataset, sourceTs, source);
+            SourceInfo info = sourceInfo(dataset, sourceTs, pixelDataBytes);
             String targetTransferSyntax = info.lossy
                     ? lossyOutput.transferSyntax(info.transferSyntax)
                     : info.transferSyntax;
@@ -602,11 +585,11 @@ public final class MaskMultiFrameUSTransformer {
 
             String encodedTs;
             long encodedBytes;
-            try (DicomInputStream dis = new DicomInputStream(encoded)) {
-                dis.readFileMetaInformation();
-                dis.readDatasetUntilPixelData();
-                encodedTs = dis.getTransferSyntax();
-                encodedBytes = encoded.length() - dis.getPosition();
+            try (DicomInputStream encodedDis = new DicomInputStream(encoded)) {
+                encodedDis.readFileMetaInformation();
+                encodedDis.readDatasetUntilPixelData();
+                encodedTs = encodedDis.getTransferSyntax();
+                encodedBytes = encoded.length() - encodedDis.getPosition();
             }
             if (TransferSyntaxType.isLossyCompression(encodedTs)) {
                 rewriteWithLossyStep(encoded, output, info, encodedTs, encodedBytes);
@@ -618,6 +601,54 @@ public final class MaskMultiFrameUSTransformer {
             for (File file : tempFiles) {
                 Files.deleteIfExists(file.toPath());
             }
+        }
+    }
+
+    /**
+     * Schreibt die bereits gelesene Instanz in eine Datei: Header aus den
+     * gelesenen Attributen, PixelData und Rest unverändert aus dem Stream.
+     *
+     * @return Anzahl Bytes ab PixelData
+     */
+    private static long spool(DicomInputStream dis, Attributes fmi, Attributes dataset, String sourceTs,
+                              File target) throws IOException {
+        if (fmi == null) {
+            fmi = dataset.createFileMetaInformation(sourceTs);
+        }
+        try (OutputStream file = new BufferedOutputStream(new FileOutputStream(target), IO_BUFFER);
+             CountingOutputStream counter = new CountingOutputStream(file)) {
+            DicomOutputStream dos = new DicomOutputStream(counter, UID.ExplicitVRLittleEndian);
+            dos.writeDataset(fmi, dataset);
+            dos.writeHeader(Tag.PixelData, dis.vr(), dis.length());
+            dos.flush();
+            long headerBytes = counter.count;
+            byte[] buffer = new byte[IO_BUFFER];
+            int read;
+            while ((read = dis.read(buffer)) != -1) {
+                counter.write(buffer, 0, read);
+            }
+            counter.flush();
+            return counter.count - headerBytes;
+        }
+    }
+
+    private static final class CountingOutputStream extends FilterOutputStream {
+        long count;
+
+        CountingOutputStream(OutputStream out) {
+            super(out);
+        }
+
+        @Override
+        public void write(int b) throws IOException {
+            out.write(b);
+            count++;
+        }
+
+        @Override
+        public void write(byte[] b, int off, int len) throws IOException {
+            out.write(b, off, len);
+            count += len;
         }
     }
 
@@ -857,37 +888,6 @@ public final class MaskMultiFrameUSTransformer {
     private static final class NonClosingInputStream extends FilterInputStream {
         NonClosingInputStream(InputStream in) {
             super(in);
-        }
-
-        @Override
-        public void close() {
-            // Stream gehört dem Aufrufer
-        }
-    }
-
-    /**
-     * Versteckt mark/reset vor dcm4che. DicomInputStream setzt sonst selbst
-     * eine Marke und überschreibt die Marke für den Header-Vorlauf; ohne
-     * mark-Support puffert es stattdessen intern.
-     */
-    private static final class NonMarkingInputStream extends FilterInputStream {
-        NonMarkingInputStream(InputStream in) {
-            super(in);
-        }
-
-        @Override
-        public boolean markSupported() {
-            return false;
-        }
-
-        @Override
-        public synchronized void mark(int readlimit) {
-            // nicht unterstützt
-        }
-
-        @Override
-        public synchronized void reset() throws IOException {
-            throw new IOException("mark/reset nicht unterstützt");
         }
 
         @Override
