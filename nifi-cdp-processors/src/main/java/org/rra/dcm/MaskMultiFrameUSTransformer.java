@@ -9,29 +9,36 @@ import org.dcm4che3.imageio.codec.Transcoder;
 import org.dcm4che3.imageio.codec.TransferSyntaxType;
 import org.dcm4che3.io.DicomEncodingOptions;
 import org.dcm4che3.io.DicomInputStream;
+import org.dcm4che3.io.DicomOutputStream;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.FilterInputStream;
+import java.io.FilterOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Deque;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 import java.util.function.Consumer;
 
 /**
  * Masks Ultrasound Multi-frame instances.
  *
- * <p>Ablauf: Eingang dekodieren (Explicit VR Little Endian), alle Frames
- * maskieren, anschliessend wieder kodieren.</p>
+ * <p>Alle Frames werden dekodiert, maskiert und wieder kodiert.</p>
  *
  * <ul>
  *   <li>Verlustfreier Eingang (nativ, RLE, JPEG Lossless, JPEG-LS Lossless,
@@ -40,6 +47,13 @@ import java.util.function.Consumer;
  *       Near-Lossless, JPEG 2000) wird gemäss {@link LossyOutput} ausgegeben,
  *       standardmässig verlustfrei als RLE Lossless.</li>
  * </ul>
+ *
+ * <p><b>Ein-Durchlauf-Pfad:</b> Für nativen Little-Endian-, RLE- und
+ * JPEG-Baseline-Eingang mit nativem, RLE- oder JPEG-Baseline-Ziel wird jeder
+ * Frame direkt aus dem Eingang gelesen, im Speicher maskiert und in den
+ * Ausgang geschrieben, ohne temporäre Dateien. Optional werden die Frames
+ * parallel verarbeitet. Alle übrigen Kombinationen laufen über dcm4che und
+ * temporäre Dateien.</p>
  *
  * <p>Nach PS3.3 C.7.6.1.1.5 bleibt eine einmal verlustbehaftet komprimierte
  * Instanz als solche gekennzeichnet: Lossy Image Compression (0028,2110)
@@ -54,6 +68,10 @@ public final class MaskMultiFrameUSTransformer {
     static final String CLEAN_PIXEL_DATA_CODE_VALUE = "113101";
     static final String CLEAN_PIXEL_DATA_CODE_MEANING = "Clean Pixel Data Option";
 
+    /** Obergrenze für den Header vor PixelData (mark/reset im Eingang). */
+    private static final int HEADER_MARK_LIMIT = 64 * 1024 * 1024;
+    private static final int IO_BUFFER = 1 << 16;
+
     private static final Set<String> SUPPORTED_TRANSFER_SYNTAXES = Set.of(
             UID.ImplicitVRLittleEndian,
             UID.ExplicitVRLittleEndian,
@@ -67,6 +85,14 @@ public final class MaskMultiFrameUSTransformer {
             UID.JPEG2000Lossless,
             UID.JPEG2000,
             UID.RLELossless
+    );
+
+    /** Transfer-Syntaxen, die der Ein-Durchlauf-Pfad lesen und schreiben kann. */
+    private static final Set<String> STREAMING_TRANSFER_SYNTAXES = Set.of(
+            UID.ImplicitVRLittleEndian,
+            UID.ExplicitVRLittleEndian,
+            UID.RLELossless,
+            UID.JPEGBaseline8Bit
     );
 
     /**
@@ -124,13 +150,20 @@ public final class MaskMultiFrameUSTransformer {
     private final List<MaskRegion> regions;
     private final LossyOutput lossyOutput;
     private final boolean markCleanPixelData;
+    private final ExecutorService frameExecutor;
+    private final int frameThreads;
 
     /**
-     * @param pixelValue Grauwert bzw. RGB-Wert 0xRRGGBB. Bei YBR_FULL-Daten
-     *                   wird ein RGB-Wert automatisch nach YBR umgerechnet.
+     * @param pixelValue    Grauwert bzw. RGB-Wert 0xRRGGBB. Bei YBR_FULL-Daten
+     *                      wird ein RGB-Wert automatisch nach YBR umgerechnet.
+     * @param frameExecutor optionaler Pool für parallele Frame-Verarbeitung
+     *                      im Ein-Durchlauf-Pfad; null = sequentiell
+     * @param frameThreads  Anzahl Threads des Pools (bestimmt die Anzahl
+     *                      gleichzeitig gehaltener Frames)
      */
     public MaskMultiFrameUSTransformer(int pixelValue, List<MaskRegion> regions,
-                                       LossyOutput lossyOutput, boolean markCleanPixelData) {
+                                       LossyOutput lossyOutput, boolean markCleanPixelData,
+                                       ExecutorService frameExecutor, int frameThreads) {
         if (regions == null || regions.isEmpty()) {
             throw new IllegalArgumentException("Mindestens eine Maskierungsregion ist erforderlich");
         }
@@ -141,6 +174,13 @@ public final class MaskMultiFrameUSTransformer {
         this.regions = List.copyOf(regions);
         this.lossyOutput = lossyOutput;
         this.markCleanPixelData = markCleanPixelData;
+        this.frameExecutor = frameThreads > 1 ? frameExecutor : null;
+        this.frameThreads = Math.max(1, frameThreads);
+    }
+
+    public MaskMultiFrameUSTransformer(int pixelValue, List<MaskRegion> regions,
+                                       LossyOutput lossyOutput, boolean markCleanPixelData) {
+        this(pixelValue, regions, lossyOutput, markCleanPixelData, null, 1);
     }
 
     public MaskMultiFrameUSTransformer(int pixelValue, List<MaskRegion> regions) {
@@ -152,48 +192,32 @@ public final class MaskMultiFrameUSTransformer {
      * weiterhin dem Aufrufer.
      */
     public Result transform(InputStream input, OutputStream output) throws IOException {
-        List<File> tempFiles = new ArrayList<>();
-        try {
-            File source = newTempFile(tempFiles, "source");
-            File decoded = newTempFile(tempFiles, "native");
-            File masked = newTempFile(tempFiles, "masked");
-            File encoded = newTempFile(tempFiles, "encoded");
-
-            Files.copy(input, source.toPath(), StandardCopyOption.REPLACE_EXISTING);
-            SourceInfo info = inspectSource(source);
-            String targetTransferSyntax = info.lossy
-                    ? lossyOutput.transferSyntax(info.transferSyntax)
-                    : info.transferSyntax;
-
-            decode(source, decoded, info);
-
-            int effectivePixelValue = effectivePixelValue(decoded);
-            boolean pixelDataMasked;
-            try (InputStream decodedInput = new FileInputStream(decoded);
-                 OutputStream maskedOutput = new FileOutputStream(masked)) {
-                pixelDataMasked = new MaskPxDataTransformer(effectivePixelValue, regions)
-                        .transform(decodedInput, maskedOutput);
-            }
-            if (!pixelDataMasked) {
-                throw new IOException("DICOM PixelData wurde nicht maskiert");
-            }
-
-            encode(masked, encoded, targetTransferSyntax);
-
-            EncodedInfo encodedInfo = inspectEncoded(encoded);
-            if (TransferSyntaxType.isLossyCompression(encodedInfo.transferSyntax)) {
-                // Erneut verlustbehaftet kodiert: neuen Kompressionsschritt
-                // an die Historie anhängen (PS3.3 C.7.6.1.1.5).
-                appendLossyStep(encoded, output, info, encodedInfo);
-            } else {
-                Files.copy(encoded.toPath(), output);
-            }
-            return new Result(info.transferSyntax, encodedInfo.transferSyntax, info.lossy);
-        } finally {
-            for (File file : tempFiles) {
-                Files.deleteIfExists(file.toPath());
-            }
+        BufferedInputStream in = new BufferedInputStream(new NonClosingInputStream(input), IO_BUFFER);
+        in.mark(HEADER_MARK_LIMIT);
+        String sourceTs;
+        try (DicomInputStream dis = new DicomInputStream(new NonMarkingInputStream(in))) {
+            dis.readFileMetaInformation();
+            Attributes dataset = dis.readDatasetUntilPixelData();
+            sourceTs = validate(dis, dataset);
         }
+        try {
+            in.reset();
+        } catch (IOException e) {
+            throw new IOException("DICOM-Header vor PixelData ist grösser als "
+                    + HEADER_MARK_LIMIT / (1024 * 1024) + " MB", e);
+        }
+        boolean lossy = TransferSyntaxType.isLossyCompression(sourceTs);
+        String targetTs = lossy ? lossyOutput.transferSyntax(sourceTs) : sourceTs;
+
+        OutputStream out = new BufferedOutputStream(new NonClosingOutputStream(output), IO_BUFFER);
+        Result result;
+        if (STREAMING_TRANSFER_SYNTAXES.contains(sourceTs) && STREAMING_TRANSFER_SYNTAXES.contains(targetTs)) {
+            result = transformStreaming(in, out, targetTs);
+        } else {
+            result = transformViaTempFiles(in, out);
+        }
+        out.flush();
+        return result;
     }
 
     // ------------------------------------------------------------------
@@ -229,63 +253,373 @@ public final class MaskMultiFrameUSTransformer {
         return null;
     }
 
-    private static SourceInfo inspectSource(File source) throws IOException {
-        try (DicomInputStream dis = new DicomInputStream(source)) {
-            dis.readFileMetaInformation();
-            Attributes dataset = dis.readDatasetUntilPixelData();
-
-            String unsupported = unsupportedReason(dataset);
-            if (unsupported != null) {
-                throw new IOException("Nicht zuständig: " + unsupported);
-            }
-            int frames = dataset.getInt(Tag.NumberOfFrames, 1);
-
-            String transferSyntax = dis.getTransferSyntax();
-            if (transferSyntax == null) {
-                transferSyntax = UID.ImplicitVRLittleEndian;
-            }
-            if (!SUPPORTED_TRANSFER_SYNTAXES.contains(transferSyntax)) {
-                throw new IOException("Nicht freigegebene Transfer-Syntax für Ultraschall-Multiframe: "
-                        + transferSyntax);
-            }
-            if (dis.tag() != Tag.PixelData) {
-                throw new IOException("DICOM-Instanz enthält kein PixelData-Element");
-            }
-
-            long uncompressedBytes = (long) dataset.getInt(Tag.Rows, 0)
-                    * dataset.getInt(Tag.Columns, 0)
-                    * dataset.getInt(Tag.SamplesPerPixel, 1)
-                    * ((dataset.getInt(Tag.BitsAllocated, 8) + 7) / 8)
-                    * frames;
-
-            boolean lossy = TransferSyntaxType.isLossyCompression(transferSyntax);
-            String[] priorRatios = nonEmpty(dataset.getStrings(Tag.LossyImageCompressionRatio));
-            String[] priorMethods = nonEmpty(dataset.getStrings(Tag.LossyImageCompressionMethod));
-
-            if (lossy) {
-                // Fehlende Angaben zum aktuellen (lossy) Kodierschritt ergänzen.
-                if (priorRatios.length == 0) {
-                    long compressedBytes = source.length() - dis.getPosition();
-                    String ratio = formatRatio(uncompressedBytes, compressedBytes);
-                    if (ratio != null) {
-                        priorRatios = new String[]{ratio};
-                    }
-                }
-                if (priorMethods.length == 0) {
-                    String method = lossyMethod(transferSyntax);
-                    if (method != null) {
-                        priorMethods = new String[]{method};
-                    }
-                }
-            }
-            return new SourceInfo(transferSyntax, lossy, uncompressedBytes,
-                    priorRatios, priorMethods);
+    /**
+     * @return Transfer-Syntax der Quelle
+     */
+    private static String validate(DicomInputStream dis, Attributes dataset) throws IOException {
+        String unsupported = unsupportedReason(dataset);
+        if (unsupported != null) {
+            throw new IOException("Nicht zuständig: " + unsupported);
         }
+        String transferSyntax = dis.getTransferSyntax();
+        if (transferSyntax == null) {
+            transferSyntax = UID.ImplicitVRLittleEndian;
+        }
+        if (!SUPPORTED_TRANSFER_SYNTAXES.contains(transferSyntax)) {
+            throw new IOException("Nicht freigegebene Transfer-Syntax für Ultraschall-Multiframe: "
+                    + transferSyntax);
+        }
+        if (dis.tag() != Tag.PixelData) {
+            throw new IOException("DICOM-Instanz enthält kein PixelData-Element");
+        }
+        return transferSyntax;
+    }
+
+    static SourceInfo sourceInfo(Attributes dataset, String transferSyntax, long compressedBytes) {
+        long uncompressedBytes = (long) dataset.getInt(Tag.Rows, 0)
+                * dataset.getInt(Tag.Columns, 0)
+                * dataset.getInt(Tag.SamplesPerPixel, 1)
+                * ((dataset.getInt(Tag.BitsAllocated, 8) + 7) / 8)
+                * dataset.getInt(Tag.NumberOfFrames, 1);
+
+        boolean lossy = TransferSyntaxType.isLossyCompression(transferSyntax);
+        String[] priorRatios = nonEmpty(dataset.getStrings(Tag.LossyImageCompressionRatio));
+        String[] priorMethods = nonEmpty(dataset.getStrings(Tag.LossyImageCompressionMethod));
+        if (lossy) {
+            // Fehlende Angaben zum aktuellen (lossy) Kodierschritt ergänzen.
+            if (priorRatios.length == 0) {
+                String ratio = formatRatio(uncompressedBytes, compressedBytes);
+                if (ratio != null) {
+                    priorRatios = new String[]{ratio};
+                }
+            }
+            if (priorMethods.length == 0) {
+                String method = lossyMethod(transferSyntax);
+                if (method != null) {
+                    priorMethods = new String[]{method};
+                }
+            }
+        }
+        return new SourceInfo(transferSyntax, lossy, uncompressedBytes, priorRatios, priorMethods);
     }
 
     // ------------------------------------------------------------------
-    // Dekodieren + Attribute aktualisieren
+    // Ein-Durchlauf-Pfad
     // ------------------------------------------------------------------
+
+    private Result transformStreaming(InputStream in, OutputStream out, String targetTs) throws IOException {
+        DicomInputStream dis = new DicomInputStream(new NonMarkingInputStream(in));
+        dis.readFileMetaInformation();
+        Attributes dataset = dis.readDatasetUntilPixelData();
+        String sourceTs = validate(dis, dataset);
+
+        int rows = dataset.getInt(Tag.Rows, 0);
+        int columns = dataset.getInt(Tag.Columns, 0);
+        int samples = dataset.getInt(Tag.SamplesPerPixel, 1);
+        int bitsAllocated = dataset.getInt(Tag.BitsAllocated, 0);
+        int frames = dataset.getInt(Tag.NumberOfFrames, 1);
+        int bytesPerSample = (bitsAllocated + 7) / 8;
+        if (rows <= 0 || columns <= 0) {
+            throw new IOException("Ungültige Bildgeometrie: " + columns + "x" + rows);
+        }
+        long frameSizeLong = (long) rows * columns * samples * bytesPerSample;
+        if (frameSizeLong > Integer.MAX_VALUE - 64) {
+            throw new IOException("Ein einzelnes Frame ist zu gross: " + frameSizeLong + " Bytes");
+        }
+        int frameSize = (int) frameSizeLong;
+
+        boolean nativeSource = !UID.RLELossless.equals(sourceTs) && !UID.JPEGBaseline8Bit.equals(sourceTs);
+        boolean jpegSource = UID.JPEGBaseline8Bit.equals(sourceTs);
+        if (nativeSource == (dis.length() == -1)) {
+            throw new IOException("PixelData passt nicht zur Transfer-Syntax " + sourceTs);
+        }
+        if (jpegSource) {
+            JpegBaselineCodec.checkFormat(bitsAllocated, samples);
+        }
+
+        // Quelle: native Frames werden gestreamt, RLE-Fragmente ebenfalls
+        // (ein Fragment pro Frame), JPEG-Fragmente werden vorab gelesen
+        // (komprimiert, klein; nötig für die Kompressionsrate).
+        long nativePixelLength = 0;
+        List<byte[]> jpegFrames = null;
+        long compressedBytes = 0;
+        if (nativeSource) {
+            nativePixelLength = dis.unsignedLength();
+            if (nativePixelLength < frameSizeLong * frames) {
+                throw new IOException("PixelData ist kleiner als erwartet: vorhanden=" + nativePixelLength
+                        + ", erwartet=" + frameSizeLong * frames);
+            }
+        } else {
+            byte[] offsetTable = JpegBaselineCodec.readItem(dis);
+            if (offsetTable == null) {
+                throw new IOException("PixelData enthält keine Offset-Tabelle");
+            }
+            if (jpegSource) {
+                List<byte[]> fragments = new ArrayList<>();
+                byte[] item;
+                while ((item = JpegBaselineCodec.readItem(dis)) != null) {
+                    fragments.add(item);
+                    compressedBytes += item.length;
+                }
+                jpegFrames = new ArrayList<>(
+                        JpegBaselineCodec.groupFragmentsToFrames(fragments, offsetTable, frames));
+            }
+        }
+        SourceInfo info = sourceInfo(dataset, sourceTs, compressedBytes);
+
+        // Layout der dekodierten Frames
+        int decodedPlanar = nativeSource ? dataset.getInt(Tag.PlanarConfiguration, 0) : 0;
+        String decodedPmi = jpegSource && samples == 3
+                ? "RGB" : dataset.getString(Tag.PhotometricInterpretation, "");
+        FrameMask mask = new FrameMask(regions, maskValueFor(samples, decodedPmi),
+                rows, columns, samples, bytesPerSample, decodedPlanar);
+
+        // Ausgabe-Attribute
+        applyLossyHistory(dataset, info);
+        if (markCleanPixelData) {
+            markCleanPixelData(dataset);
+        }
+        if (samples == 3) {
+            dataset.setString(Tag.PhotometricInterpretation, VR.CS, decodedPmi);
+            dataset.setInt(Tag.PlanarConfiguration, VR.US, decodedPlanar);
+        }
+        boolean nativeTarget = !UID.RLELossless.equals(targetTs) && !UID.JPEGBaseline8Bit.equals(targetTs);
+        boolean jpegTarget = UID.JPEGBaseline8Bit.equals(targetTs);
+        if (jpegTarget) {
+            JpegBaselineCodec.checkEncodable(dataset);
+        }
+        if (!nativeTarget && samples == 3) {
+            dataset.setInt(Tag.PlanarConfiguration, VR.US, 0);
+            if (jpegTarget) {
+                dataset.setString(Tag.PhotometricInterpretation, VR.CS, "YBR_FULL_422");
+            }
+        }
+
+        // Verarbeitung pro Frame: dekodieren -> maskieren -> kodieren
+        final int planar = decodedPlanar;
+        FrameWork work = unit -> {
+            byte[] frame;
+            if (nativeSource) {
+                frame = unit;
+            } else {
+                frame = new byte[frameSize];
+                if (jpegSource) {
+                    JpegBaselineCodec.decodeFrame(unit, frame, columns, rows, samples);
+                } else {
+                    RleLosslessCodec.decodeFrame(unit, frame, rows, columns, samples, bytesPerSample);
+                }
+            }
+            mask.apply(frame);
+            if (nativeTarget) {
+                return frame;
+            }
+            if (jpegTarget) {
+                return JpegBaselineCodec.encodeFrame(frame, columns, rows, samples, planar,
+                        JpegBaselineCodec.DEFAULT_QUALITY);
+            }
+            return RleLosslessCodec.encodeFrame(frame, rows, columns, samples, bytesPerSample, planar);
+        };
+        List<byte[]> jpegUnits = jpegFrames;
+        FrameSource source = index -> {
+            if (jpegUnits != null) {
+                byte[] unit = jpegUnits.get(index);
+                jpegUnits.set(index, null); // Speicher früh freigeben
+                return unit;
+            }
+            if (nativeSource) {
+                byte[] frame = new byte[frameSize];
+                dis.readFully(frame);
+                return frame;
+            }
+            byte[] fragment = JpegBaselineCodec.readItem(dis);
+            if (fragment == null) {
+                throw new IOException("RLE: weniger Fragmente als Frames (" + index + " von " + frames + ")");
+            }
+            return fragment;
+        };
+
+        DicomOutputStream dos = new DicomOutputStream(out, UID.ExplicitVRLittleEndian);
+        if (jpegTarget) {
+            // Erneut lossy: Kompressionsrate des neuen Schritts muss vor
+            // PixelData im Header stehen, daher Fragmente erst sammeln.
+            List<byte[]> encoded = new ArrayList<>(frames);
+            processFrames(frames, source, work, encoded::add);
+            long encodedBytes = 0;
+            for (byte[] fragment : encoded) {
+                encodedBytes += fragment.length;
+            }
+            appendLossyStep(dataset, info, targetTs, encodedBytes);
+            dos.writeDataset(dataset.createFileMetaInformation(targetTs), dataset);
+            dos.writeHeader(Tag.PixelData, VR.OB, -1);
+            dos.writeHeader(Tag.Item, null, 0);
+            for (byte[] fragment : encoded) {
+                JpegBaselineCodec.writeFragment(dos, fragment);
+            }
+            dos.writeHeader(Tag.SequenceDelimitationItem, null, 0);
+        } else if (nativeTarget) {
+            long pixelLength = frameSizeLong * frames;
+            if (pixelLength > 0xFFFFFFFEL) {
+                throw new IOException("PixelData zu gross für natives Format: " + pixelLength + " Bytes");
+            }
+            dos.writeDataset(dataset.createFileMetaInformation(targetTs), dataset);
+            dos.writeHeader(Tag.PixelData, bytesPerSample == 2 ? VR.OW : VR.OB,
+                    (int) ((pixelLength + 1) & ~1L));
+            processFrames(frames, source, work, dos::write);
+            if ((pixelLength & 1) != 0) {
+                dos.write(0);
+            }
+        } else {
+            dos.writeDataset(dataset.createFileMetaInformation(targetTs), dataset);
+            dos.writeHeader(Tag.PixelData, VR.OB, -1);
+            dos.writeHeader(Tag.Item, null, 0);
+            processFrames(frames, source, work, fragment -> JpegBaselineCodec.writeFragment(dos, fragment));
+            dos.writeHeader(Tag.SequenceDelimitationItem, null, 0);
+        }
+
+        // Rest der Quelle nach den Frames: Padding bzw. Sequence Delimitation
+        // Item, danach eventuelle Attribute hinter PixelData übernehmen.
+        if (nativeSource) {
+            long remaining = nativePixelLength - frameSizeLong * frames;
+            if (remaining > 0) {
+                dis.skipFully(remaining);
+            }
+        } else if (!jpegSource) {
+            if (JpegBaselineCodec.readItem(dis) != null) {
+                throw new IOException("RLE: mehr Fragmente als Frames (" + frames + ")");
+            }
+        }
+        Attributes trailing = new Attributes(dis.bigEndian(), 4);
+        dis.readAttributes(trailing, -1, -1);
+        trailing.writeTo(dos);
+        dos.finish();
+        dos.flush();
+        return new Result(sourceTs, targetTs, info.lossy);
+    }
+
+    /**
+     * Liest, verarbeitet und schreibt alle Frames in Originalreihenfolge.
+     * Mit Pool laufen bis zu 2 x frameThreads Frames gleichzeitig.
+     */
+    private void processFrames(int frames, FrameSource source, FrameWork work, FrameSink sink)
+            throws IOException {
+        if (frameExecutor == null) {
+            for (int i = 0; i < frames; i++) {
+                sink.accept(work.apply(source.read(i)));
+            }
+            return;
+        }
+        int window = 2 * frameThreads;
+        Deque<Future<byte[]>> pending = new ArrayDeque<>(window);
+        try {
+            for (int i = 0; i < frames; i++) {
+                byte[] unit = source.read(i);
+                pending.add(frameExecutor.submit(() -> work.apply(unit)));
+                if (pending.size() >= window) {
+                    sink.accept(await(pending.poll()));
+                }
+            }
+            while (!pending.isEmpty()) {
+                sink.accept(await(pending.poll()));
+            }
+        } finally {
+            for (Future<byte[]> future : pending) {
+                future.cancel(true);
+            }
+        }
+    }
+
+    private static byte[] await(Future<byte[]> future) throws IOException {
+        try {
+            return future.get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Frame-Verarbeitung unterbrochen", e);
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof IOException) {
+                throw (IOException) cause;
+            }
+            if (cause instanceof RuntimeException) {
+                throw (RuntimeException) cause;
+            }
+            throw new IOException(cause);
+        }
+    }
+
+    @FunctionalInterface
+    private interface FrameSource {
+        byte[] read(int index) throws IOException;
+    }
+
+    @FunctionalInterface
+    private interface FrameWork {
+        byte[] apply(byte[] unit) throws IOException;
+    }
+
+    @FunctionalInterface
+    private interface FrameSink {
+        void accept(byte[] data) throws IOException;
+    }
+
+    // ------------------------------------------------------------------
+    // Fallback über dcm4che und temporäre Dateien
+    // ------------------------------------------------------------------
+
+    private Result transformViaTempFiles(InputStream input, OutputStream output) throws IOException {
+        List<File> tempFiles = new ArrayList<>();
+        try {
+            File source = newTempFile(tempFiles, "source");
+            File decoded = newTempFile(tempFiles, "native");
+            File masked = newTempFile(tempFiles, "masked");
+            File encoded = newTempFile(tempFiles, "encoded");
+
+            Files.copy(input, source.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            SourceInfo info;
+            try (DicomInputStream dis = new DicomInputStream(source)) {
+                dis.readFileMetaInformation();
+                Attributes dataset = dis.readDatasetUntilPixelData();
+                String ts = validate(dis, dataset);
+                info = sourceInfo(dataset, ts, source.length() - dis.getPosition());
+            }
+            String targetTransferSyntax = info.lossy
+                    ? lossyOutput.transferSyntax(info.transferSyntax)
+                    : info.transferSyntax;
+
+            decode(source, decoded, info);
+
+            int effectivePixelValue = effectivePixelValue(decoded);
+            boolean pixelDataMasked;
+            try (InputStream decodedInput = new BufferedInputStream(new FileInputStream(decoded), IO_BUFFER);
+                 OutputStream maskedOutput = new BufferedOutputStream(new FileOutputStream(masked), IO_BUFFER)) {
+                pixelDataMasked = new MaskPxDataTransformer(effectivePixelValue, regions)
+                        .transform(decodedInput, maskedOutput);
+            }
+            if (!pixelDataMasked) {
+                throw new IOException("DICOM PixelData wurde nicht maskiert");
+            }
+
+            encode(masked, encoded, targetTransferSyntax);
+
+            String encodedTs;
+            long encodedBytes;
+            try (DicomInputStream dis = new DicomInputStream(encoded)) {
+                dis.readFileMetaInformation();
+                dis.readDatasetUntilPixelData();
+                encodedTs = dis.getTransferSyntax();
+                encodedBytes = encoded.length() - dis.getPosition();
+            }
+            if (TransferSyntaxType.isLossyCompression(encodedTs)) {
+                rewriteWithLossyStep(encoded, output, info, encodedTs, encodedBytes);
+            } else {
+                Files.copy(encoded.toPath(), output);
+            }
+            return new Result(info.transferSyntax, encodedTs, info.lossy);
+        } finally {
+            for (File file : tempFiles) {
+                Files.deleteIfExists(file.toPath());
+            }
+        }
+    }
 
     private void decode(File source, File target, SourceInfo info) throws IOException {
         Consumer<Attributes> customizer = dataset -> {
@@ -295,18 +629,16 @@ public final class MaskMultiFrameUSTransformer {
             }
         };
         if (UID.JPEGBaseline8Bit.equals(info.transferSyntax)) {
-            // JPEG Baseline mit dem JDK-Codec statt opencv: der opencv-Codec
-            // scheitert je nach nativer Bibliothek an Multiframe-JPEG
-            // ("No implementation to handle 9 channels").
-            try (InputStream in = new BufferedInputStream(new FileInputStream(source));
-                 OutputStream out = new BufferedOutputStream(new FileOutputStream(target))) {
+            // JDK-Codec statt opencv, siehe JpegBaselineCodec
+            try (InputStream in = new BufferedInputStream(new FileInputStream(source), IO_BUFFER);
+                 OutputStream out = new BufferedOutputStream(new FileOutputStream(target), IO_BUFFER)) {
                 JpegBaselineCodec.decode(in, out, customizer);
             }
             return;
         }
-        try (OutputStream out = new BufferedOutputStream(new FileOutputStream(target));
+        try (OutputStream out = new BufferedOutputStream(new FileOutputStream(target), IO_BUFFER);
              Transcoder transcoder = new Transcoder(
-                     new BufferedInputStream(new FileInputStream(source)))) {
+                     new BufferedInputStream(new FileInputStream(source), IO_BUFFER))) {
             transcoder.setIncludeFileMetaInformation(true);
             transcoder.setRetainFileMetaInformation(false);
             transcoder.setEncodingOptions(DicomEncodingOptions.DEFAULT);
@@ -321,6 +653,51 @@ public final class MaskMultiFrameUSTransformer {
         }
     }
 
+    private int effectivePixelValue(File decoded) throws IOException {
+        try (DicomInputStream dis = new DicomInputStream(decoded)) {
+            dis.readFileMetaInformation();
+            Attributes dataset = dis.readDatasetUntilPixelData();
+            return maskValueFor(dataset.getInt(Tag.SamplesPerPixel, 1),
+                    dataset.getString(Tag.PhotometricInterpretation, ""));
+        }
+    }
+
+    private static void encode(File nativeSource, File target, String transferSyntax)
+            throws IOException {
+        try (InputStream in = new BufferedInputStream(new FileInputStream(nativeSource), IO_BUFFER);
+             OutputStream out = new BufferedOutputStream(new FileOutputStream(target), IO_BUFFER)) {
+            if (UID.RLELossless.equals(transferSyntax)) {
+                // dcm4che hat keinen RLE-Writer
+                RleLosslessCodec.encode(in, out);
+            } else if (UID.JPEGBaseline8Bit.equals(transferSyntax)) {
+                // JDK-Codec statt opencv, siehe JpegBaselineCodec
+                JpegBaselineCodec.encode(in, out, JpegBaselineCodec.DEFAULT_QUALITY);
+            } else {
+                Dicom2DicomTranscoder.transcode(in, out, transferSyntax);
+            }
+        }
+    }
+
+    private static void rewriteWithLossyStep(File encoded, OutputStream output, SourceInfo info,
+                                             String encodedTs, long encodedBytes) throws IOException {
+        // Gleicher Transfer-Syntax: dcm4che kopiert die Fragmente unverändert,
+        // nur die Attribute werden neu geschrieben.
+        try (Transcoder transcoder = new Transcoder(
+                new BufferedInputStream(new FileInputStream(encoded), IO_BUFFER))) {
+            transcoder.setIncludeFileMetaInformation(true);
+            transcoder.setRetainFileMetaInformation(false);
+            transcoder.setEncodingOptions(DicomEncodingOptions.DEFAULT);
+            transcoder.transcode((t, dataset) -> {
+                appendLossyStep(dataset, info, encodedTs, encodedBytes);
+                return new NonClosingOutputStream(output);
+            });
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Attribute
+    // ------------------------------------------------------------------
+
     static void applyLossyHistory(Attributes dataset, SourceInfo info) {
         if (!info.lossy) {
             return;
@@ -331,6 +708,24 @@ public final class MaskMultiFrameUSTransformer {
         }
         if (info.priorMethods.length > 0) {
             dataset.setString(Tag.LossyImageCompressionMethod, VR.CS, info.priorMethods);
+        }
+    }
+
+    /**
+     * Erneute lossy-Kodierung dokumentieren: neuen Schritt an Ratio und
+     * Method anhängen (PS3.3 C.7.6.1.1.5).
+     */
+    static void appendLossyStep(Attributes dataset, SourceInfo info, String encodedTs, long encodedBytes) {
+        String newRatio = formatRatio(info.uncompressedBytes, encodedBytes);
+        String newMethod = lossyMethod(encodedTs);
+        String[] ratios = newRatio == null ? info.priorRatios : append(info.priorRatios, newRatio);
+        String[] methods = newMethod == null ? info.priorMethods : append(info.priorMethods, newMethod);
+        dataset.setString(Tag.LossyImageCompression, VR.CS, "01");
+        if (ratios.length > 0) {
+            dataset.setString(Tag.LossyImageCompressionRatio, VR.DS, ratios);
+        }
+        if (methods.length > 0) {
+            dataset.setString(Tag.LossyImageCompressionMethod, VR.CS, methods);
         }
     }
 
@@ -357,23 +752,18 @@ public final class MaskMultiFrameUSTransformer {
     // Maskierungswert passend zum Farbraum
     // ------------------------------------------------------------------
 
-    private int effectivePixelValue(File decoded) throws IOException {
-        try (DicomInputStream dis = new DicomInputStream(decoded)) {
-            dis.readFileMetaInformation();
-            Attributes dataset = dis.readDatasetUntilPixelData();
-            if (dataset.getInt(Tag.SamplesPerPixel, 1) != 3) {
+    private int maskValueFor(int samples, String photometricInterpretation) throws IOException {
+        if (samples != 3) {
+            return pixelValue;
+        }
+        switch (photometricInterpretation) {
+            case "RGB":
                 return pixelValue;
-            }
-            String pmi = dataset.getString(Tag.PhotometricInterpretation, "");
-            switch (pmi) {
-                case "RGB":
-                    return pixelValue;
-                case "YBR_FULL":
-                    return rgbToYbrFull(pixelValue);
-                default:
-                    throw new IOException("Photometric Interpretation nach dem Dekodieren nicht unterstützt: "
-                            + pmi + " (erwartet RGB oder YBR_FULL)");
-            }
+            case "YBR_FULL":
+                return rgbToYbrFull(pixelValue);
+            default:
+                throw new IOException("Photometric Interpretation nach dem Dekodieren nicht unterstützt: "
+                        + photometricInterpretation + " (erwartet RGB oder YBR_FULL)");
         }
     }
 
@@ -392,69 +782,6 @@ public final class MaskMultiFrameUSTransformer {
 
     private static int clamp(int value) {
         return Math.max(0, Math.min(255, value));
-    }
-
-    // ------------------------------------------------------------------
-    // Kodieren
-    // ------------------------------------------------------------------
-
-    private static void encode(File nativeSource, File target, String transferSyntax)
-            throws IOException {
-        try (InputStream in = new BufferedInputStream(new FileInputStream(nativeSource));
-             OutputStream out = new BufferedOutputStream(new FileOutputStream(target))) {
-            if (UID.RLELossless.equals(transferSyntax)) {
-                // dcm4che hat keinen RLE-Writer
-                RleLosslessEncoder.encode(in, out);
-            } else if (UID.JPEGBaseline8Bit.equals(transferSyntax)) {
-                // JDK-Codec statt opencv, siehe decode()
-                JpegBaselineCodec.encode(in, out, JpegBaselineCodec.DEFAULT_QUALITY);
-            } else {
-                Dicom2DicomTranscoder.transcode(in, out, transferSyntax);
-            }
-        }
-    }
-
-    // ------------------------------------------------------------------
-    // Erneute lossy-Kodierung dokumentieren
-    // ------------------------------------------------------------------
-
-    private static EncodedInfo inspectEncoded(File encoded) throws IOException {
-        try (DicomInputStream dis = new DicomInputStream(encoded)) {
-            dis.readFileMetaInformation();
-            dis.readDatasetUntilPixelData();
-            String ts = dis.getTransferSyntax();
-            return new EncodedInfo(ts, encoded.length() - dis.getPosition());
-        }
-    }
-
-    private static void appendLossyStep(File encoded, OutputStream output,
-                                        SourceInfo info, EncodedInfo encodedInfo) throws IOException {
-        String newRatio = formatRatio(info.uncompressedBytes, encodedInfo.pixelDataBytes);
-        String newMethod = lossyMethod(encodedInfo.transferSyntax);
-
-        String[] ratios = newRatio == null
-                ? info.priorRatios : append(info.priorRatios, newRatio);
-        String[] methods = newMethod == null
-                ? info.priorMethods : append(info.priorMethods, newMethod);
-
-        // Gleicher Transfer-Syntax: dcm4che kopiert die Fragmente unverändert,
-        // nur die Attribute werden neu geschrieben.
-        try (Transcoder transcoder = new Transcoder(
-                new BufferedInputStream(new FileInputStream(encoded)))) {
-            transcoder.setIncludeFileMetaInformation(true);
-            transcoder.setRetainFileMetaInformation(false);
-            transcoder.setEncodingOptions(DicomEncodingOptions.DEFAULT);
-            transcoder.transcode((t, dataset) -> {
-                dataset.setString(Tag.LossyImageCompression, VR.CS, "01");
-                if (ratios.length > 0) {
-                    dataset.setString(Tag.LossyImageCompressionRatio, VR.DS, ratios);
-                }
-                if (methods.length > 0) {
-                    dataset.setString(Tag.LossyImageCompressionMethod, VR.CS, methods);
-                }
-                return new NonClosingOutputStream(output);
-            });
-        }
     }
 
     // ------------------------------------------------------------------
@@ -524,20 +851,56 @@ public final class MaskMultiFrameUSTransformer {
         }
     }
 
-    private static final class EncodedInfo {
-        final String transferSyntax;
-        final long pixelDataBytes;
+    /**
+     * Verhindert, dass dcm4che den Stream des Aufrufers schliesst.
+     */
+    private static final class NonClosingInputStream extends FilterInputStream {
+        NonClosingInputStream(InputStream in) {
+            super(in);
+        }
 
-        EncodedInfo(String transferSyntax, long pixelDataBytes) {
-            this.transferSyntax = transferSyntax;
-            this.pixelDataBytes = pixelDataBytes;
+        @Override
+        public void close() {
+            // Stream gehört dem Aufrufer
         }
     }
 
     /**
-     * Verhindert, dass dcm4che den Ziel-Stream schliesst.
+     * Versteckt mark/reset vor dcm4che. DicomInputStream setzt sonst selbst
+     * eine Marke und überschreibt die Marke für den Header-Vorlauf; ohne
+     * mark-Support puffert es stattdessen intern.
      */
-    private static final class NonClosingOutputStream extends java.io.FilterOutputStream {
+    private static final class NonMarkingInputStream extends FilterInputStream {
+        NonMarkingInputStream(InputStream in) {
+            super(in);
+        }
+
+        @Override
+        public boolean markSupported() {
+            return false;
+        }
+
+        @Override
+        public synchronized void mark(int readlimit) {
+            // nicht unterstützt
+        }
+
+        @Override
+        public synchronized void reset() throws IOException {
+            throw new IOException("mark/reset nicht unterstützt");
+        }
+
+        @Override
+        public void close() {
+            // Stream gehört dem Aufrufer
+        }
+    }
+
+    /**
+     * Verhindert, dass dcm4che den Ziel-Stream schliesst. Überschreibt
+     * write(byte[],int,int), da FilterOutputStream sonst byteweise schreibt.
+     */
+    private static final class NonClosingOutputStream extends FilterOutputStream {
         NonClosingOutputStream(OutputStream out) {
             super(out);
         }
