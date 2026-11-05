@@ -1,0 +1,365 @@
+package org.rra.cstore;
+
+
+import lombok.extern.slf4j.Slf4j;
+import org.apache.nifi.flowfile.FlowFile;
+import org.apache.nifi.flowfile.attributes.CoreAttributes;
+import org.apache.nifi.processor.ProcessSession;
+import org.apache.nifi.processor.ProcessSessionFactory;
+import org.apache.nifi.processor.Relationship;
+import org.apache.nifi.processor.exception.ProcessException;
+import org.dcm4che3.data.Attributes;
+import org.dcm4che3.data.Tag;
+import org.dcm4che3.data.UID;
+import org.dcm4che3.data.VR;
+import org.dcm4che3.io.DicomInputStream;
+import org.dcm4che3.io.DicomOutputStream;
+import org.dcm4che3.net.*;
+import org.dcm4che3.net.pdu.PresentationContext;
+import org.dcm4che3.net.service.BasicCEchoSCP;
+import org.dcm4che3.net.service.BasicCStoreSCP;
+import org.dcm4che3.net.service.DicomServiceException;
+import org.dcm4che3.net.service.DicomServiceRegistry;
+import org.dcm4che3.util.SafeClose;
+import org.dcm4che3.util.StreamUtils;
+import org.dcm4che3.util.StringUtils;
+import org.rra.dcmconfig.DcmConfig;
+
+import java.io.BufferedOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.SocketException;
+import java.security.MessageDigest;
+import java.util.HexFormat;
+import java.util.Properties;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicReference;
+
+@Slf4j
+public class NifiStoreScp {
+
+    private final Device device = new Device("store_scp");
+    private final ApplicationEntity ae = new ApplicationEntity("*");
+    private final Connection conn = new Connection();
+    private final ExecutorService executorService = Executors.newCachedThreadPool();
+    private final ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
+    private AtomicReference<ProcessSessionFactory> sessionFactory;
+    private CountDownLatch sessionFactorySetSignal;
+    private Relationship relationshipSuccess;
+
+    public NifiStoreScp(String host, int port, String calledAET, DcmConfig cfg) {
+        init(host, port, calledAET, cfg);
+    }
+
+    public static String[] toUIDs(String s) {
+        if (s.equals("*"))
+            return new String[]{"*"};
+
+        String[] uids = StringUtils.split(s, ',');
+        for (int i = 0; i < uids.length; i++)
+            uids[i] = toUID(uids[i]);
+        return uids;
+    }
+
+    public static String toUID(String uid) {
+        uid = uid.trim();
+        return (uid.equals("*") || Character.isDigit(uid.charAt(0)))
+                ? uid
+                : UID.forName(uid);
+    }
+
+    public static Properties loadProperties(String url, Properties p)
+            throws IOException {
+        if (p == null)
+            p = new Properties();
+        InputStream in = StreamUtils.openFileOrURL(url);
+        try {
+            p.load(in);
+        } finally {
+            SafeClose.close(in);
+        }
+        return p;
+    }
+
+    public boolean shutDown() {
+        log.info("+ + + Shutting down Store SCP + + +");
+        try {
+            this.device.unbindConnections();
+            scheduledExecutorService.shutdown();
+            return executorService.awaitTermination(3, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+
+        }
+        return false;
+    }
+
+    private void init(String host, int port, String calledAET, DcmConfig cfg) {
+        Properties p;
+        try {
+            p = loadProperties("resource:sop-classes.properties", null);
+            log.info("+ + + Read store-scp properties ok. + + +");
+            log.info("+ + + " + calledAET + "@" + host + ":" + port + " + + +");
+            device.setDimseRQHandler(createServiceRegistry());
+            device.addConnection(conn);
+            device.addApplicationEntity(ae);
+            ae.setAssociationAcceptor(true);
+            ae.addConnection(conn);
+            ae.setAETitle(calledAET);
+            //Bind to 0.0.0.0!!!
+            conn.setHostname(host);
+            conn.setPort(port);
+
+            configure(conn, cfg);
+
+            for (String cuid : p.stringPropertyNames()) {
+                String ts = p.getProperty(cuid);
+                TransferCapability tc = new TransferCapability(null,
+                        toUID(cuid),
+                        TransferCapability.Role.SCP,
+                        toUIDs(ts));
+                ae.addTransferCapability(tc);
+            }
+            device.setScheduledExecutor(scheduledExecutorService);
+            device.setExecutor(executorService);
+        } catch (IOException e) {
+            log.error(e.getMessage(), e);
+        }
+    }
+
+    private static void configure(Connection conn, DcmConfig cfg) {
+        // -- max-pdulen-rcv
+        // -- max-pdulen-snd
+        // 16378 by default
+        conn.setReceivePDULength(Connection.DEF_MAX_PDU_LENGTH);
+        conn.setSendPDULength(Connection.DEF_MAX_PDU_LENGTH);
+        /*
+         * do not use asynchronous mode;
+         * equivalent to
+         * --max-ops-invoked=1 and
+         * --max-ops-performed=1
+         */
+        if (cfg.NOT_ASYNC) {
+            conn.setMaxOpsInvoked(1);
+            conn.setMaxOpsPerformed(1);
+        } else {
+            conn.setMaxOpsInvoked(0);
+            conn.setMaxOpsPerformed(0);
+        }
+        conn.setPackPDV(!cfg.NOT_PACK_PDV);
+        conn.setConnectTimeout(cfg.CONNECT_TIMEOUT);
+        conn.setRequestTimeout(cfg.REQUEST_TIMEOUT);
+        conn.setAcceptTimeout(cfg.ACCEPT_TIMEOUT);
+        conn.setReleaseTimeout(cfg.RELEASE_TIMEOUT);
+        conn.setSendTimeout(cfg.SEND_TIMEOUT);
+        conn.setStoreTimeout(cfg.STORE_TIMEOUT);
+        conn.setResponseTimeout(cfg.RESPONSE_TIMEOUT);
+
+        conn.setIdleTimeout(cfg.IDLE_TIMEOUT);
+        conn.setSocketCloseDelay(Connection.DEF_SOCKETDELAY);
+        conn.setSendBufferSize(cfg.SND_BUFFER);
+        conn.setReceiveBufferSize(cfg.RCV_BUFFER);
+        conn.setTcpNoDelay(!cfg.TCP_DELAY);
+    }
+
+    public void start() {
+        try {
+            device.bindConnections();
+        } catch (Exception e) {
+            throw new ProcessException("Store-SCP server could not be started.", e);
+        }
+    }
+
+    private DicomServiceRegistry createServiceRegistry(/*String storageDir*/) {
+        DicomServiceRegistry serviceRegistry = new DicomServiceRegistry();
+        serviceRegistry.addDicomService(new BasicCEchoSCP());
+        serviceRegistry.addDicomService(new CStoreSCP());
+        //serviceRegistry.addDicomService(new MppsSCP(storageDir));
+        return serviceRegistry;
+    }
+
+    public void setSessionFactory(AtomicReference<ProcessSessionFactory> sessionFactory) {
+        this.sessionFactory = sessionFactory;
+    }
+
+    public void setSessionFactorySetSignal(CountDownLatch sessionFactorySetSignal) {
+        this.sessionFactorySetSignal = sessionFactorySetSignal;
+    }
+
+    private ProcessSession createProcessSession() throws InterruptedException, TimeoutException {
+        ProcessSessionFactory processSessionFactory = getProcessSessionFactory();
+        return processSessionFactory.createSession();
+    }
+
+    private ProcessSessionFactory getProcessSessionFactory() throws InterruptedException, TimeoutException {
+        if (sessionFactorySetSignal.await(10000, TimeUnit.MILLISECONDS)) {
+            return sessionFactory.get();
+        } else {
+            throw new TimeoutException("Waiting period for sessionFactory is over.");
+        }
+    }
+
+    public void setRelationshipSuccess(Relationship relationshipSuccess) {
+        this.relationshipSuccess = relationshipSuccess;
+    }
+
+    private class CStoreSCP extends BasicCStoreSCP {
+
+        public CStoreSCP() {
+            super("*");
+        }
+
+        @Override
+        protected void store(Association as, PresentationContext pc, Attributes rq, PDVInputStream data, Attributes rsp) throws IOException {
+            //specifies status code in returned C-STORE RSPs, 0000H by default.
+            rsp.setInt(Tag.Status, VR.US, 0);
+            String cuid = rq.getString(Tag.AffectedSOPClassUID);
+            String iuid = rq.getString(Tag.AffectedSOPInstanceUID);
+            String tsuid = pc.getTransferSyntax();
+
+            // C-MOVE Originator Information aus dem C-STORE-RQ
+            final String moveOriginatorAET = rq.getString(
+                    Tag.MoveOriginatorApplicationEntityTitle);
+
+            final int moveOriginatorMessageID = rq.getInt(
+                    Tag.MoveOriginatorMessageID, -1);
+
+            log.info(
+                    "C-STORE received: CallingAET={}, CalledAET={}, "
+                            + "MoveOriginatorAET={}, MoveOriginatorMessageID={}",
+                    as.getCallingAET(),
+                    as.getCalledAET(),
+                    moveOriginatorAET,
+                    moveOriginatorMessageID
+            );
+            final ProcessSession processSession;
+            try {
+                processSession = createProcessSession();
+            } catch (InterruptedException | TimeoutException exception) {
+                log.error("ProcessSession could not be acquired, command STOR aborted.", exception);
+                throw new IOException("File transfer failed.");
+            }
+            FlowFile flowFile = processSession.create();
+            try {
+                long t1 = System.nanoTime();
+                String studyInstanceUID;
+                String seriesInstanceUID;
+                String patientID;
+                String modality;
+                try (OutputStream flowFileOutputStream = processSession.write(flowFile)) {
+                    try (BufferedOutputStream bos = new BufferedOutputStream(flowFileOutputStream)) {
+                        storeAttributesTo(bos, as.createFileMetaInformation(iuid, cuid, tsuid), data);
+                    }
+                    log.debug("+ + + DICOM Object received -> SOPIUID: {} + + +", iuid);
+                    // New read dicom attrributes
+                    Attributes dicomAttributes;
+                    try (InputStream inputStream = processSession.read(flowFile)) {
+                        dicomAttributes = parse(inputStream);
+                    }
+                    studyInstanceUID = dicomAttributes.getString(Tag.StudyInstanceUID);
+                    seriesInstanceUID = dicomAttributes.getString(Tag.SeriesInstanceUID);
+                    patientID = dicomAttributes.getString(Tag.PatientID, "NO-ID");
+                    modality = dicomAttributes.getString(Tag.Modality, "OT");
+                    log.debug(
+                            "StudyInstanceUID={}, SeriesInstanceUID={}",
+                            studyInstanceUID,
+                            seriesInstanceUID
+                    );
+
+                } catch (SocketException socketException) {
+                    log.error("Socket exception during data transfer", socketException);
+                    processSession.rollback();
+                    throw new IOException(socketException.getMessage());
+                } catch (IOException ioException) {
+                    log.error("IOException during data transfer", ioException);
+                    processSession.rollback();
+                    throw new IOException(ioException.getMessage());
+                }
+                try {
+                    final String callingAET = as.getAAssociateAC().getCallingAET();
+                    final String calledAET = as.getAAssociateAC().getCalledAET();
+                    // Move Originator Attribute nur setzen, wenn vorhanden
+                    if (moveOriginatorAET != null) {
+                        flowFile = processSession.putAttribute(
+                                flowFile,
+                                "dicom.move.originator.aet",
+                                moveOriginatorAET
+                        );
+                    }
+
+                    if (moveOriginatorMessageID >= 0) {
+                        flowFile = processSession.putAttribute(
+                                flowFile,
+                                "dicom.move.originator.message.id",
+                                Integer.toString(moveOriginatorMessageID)
+                        );
+                    }
+                    flowFile = processSession.putAttribute(flowFile, "AffectedSOPClassUID", cuid);
+                    flowFile = processSession.putAttribute(flowFile, "AffectedSOPInstanceUID", iuid);
+                    flowFile = processSession.putAttribute(flowFile, "TransferSyntax", tsuid);
+                    flowFile = processSession.putAttribute(flowFile, "CallingAET", callingAET);
+                    flowFile = processSession.putAttribute(flowFile, "CalledAET", calledAET);
+                    // new attributes
+                    flowFile = processSession.putAttribute(flowFile, "StudyInstanceUID", studyInstanceUID);
+                    flowFile = processSession.putAttribute(flowFile, "SeriesInstanceUID", seriesInstanceUID);
+                    flowFile = processSession.putAttribute(flowFile, "PatientID", patientID);
+                    flowFile = processSession.putAttribute(flowFile, "Modality", modality);
+
+                    MessageDigest md5 = MessageDigest.getInstance("MD5");
+                    byte[] studyUIDhash = md5.digest(studyInstanceUID.getBytes());
+                    byte[] seriesUIDhash = md5.digest(seriesInstanceUID.getBytes());
+                    String hexSeriesUIDAttr = HexFormat.of().formatHex(seriesUIDhash);
+                    String hexStudyUIDAttr = HexFormat.of().formatHex(studyUIDhash);
+                    //
+                    flowFile = processSession.putAttribute(flowFile, "HexStudyIUID", hexStudyUIDAttr);
+                    flowFile = processSession.putAttribute(flowFile, "HexSeriesIUID", hexSeriesUIDAttr);
+                    //
+                    String fileName = flowFile.getAttribute(CoreAttributes.FILENAME.key()) + ".dcm";
+                    flowFile = processSession.putAttribute(flowFile, CoreAttributes.FILENAME.key(), fileName);
+                    //Transfer application/dicom
+                    flowFile = processSession.putAttribute(flowFile, CoreAttributes.MIME_TYPE.key(), "application/dicom");
+                    final long importNanos = System.nanoTime() - t1;
+                    final long importMillis = TimeUnit.MILLISECONDS.convert(importNanos, TimeUnit.NANOSECONDS);
+                    processSession.getProvenanceReporter().receive(flowFile, callingAET, importMillis);
+                    //
+                    processSession.transfer(flowFile, relationshipSuccess);
+                } catch (Exception exception) {
+                    processSession.rollback();
+                    log.error("Process session error. ", exception);
+                }
+
+                processSession.commitAsync(() -> {
+                    // if data transfer ok - send transfer complete message
+                    log.debug("# # # C-Store Process Complete # # #");
+                });
+
+            } catch (Exception e) {
+                throw new DicomServiceException(Status.ProcessingFailure, e);
+            }
+        }
+
+        private Attributes parse(InputStream in) throws IOException {
+            DicomInputStream din = new DicomInputStream(in);
+            try {
+                din.setIncludeBulkData(DicomInputStream.IncludeBulkData.NO);
+                return din.readDatasetUntilPixelData();
+            } finally {
+                SafeClose.close(in);
+            }
+        }
+
+        private void storeAttributesTo(OutputStream outputStream, Attributes fmi, PDVInputStream data) {
+            try {
+                DicomOutputStream out = new DicomOutputStream(outputStream, UID.ExplicitVRLittleEndian);
+                try {
+                    out.writeFileMetaInformation(fmi);
+                    data.copyTo(out);
+                } finally {
+                    SafeClose.close(out);
+                }
+            } catch (Exception e) {
+            }
+        }
+
+    }
+}
