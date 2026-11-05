@@ -10,6 +10,7 @@ import org.apache.nifi.annotation.documentation.CapabilityDescription;
 import org.apache.nifi.annotation.documentation.Tags;
 import org.apache.nifi.annotation.documentation.UseCase;
 import org.apache.nifi.annotation.lifecycle.OnScheduled;
+import org.apache.nifi.annotation.lifecycle.OnStopped;
 import org.apache.nifi.components.AllowableValue;
 import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.components.ValidationResult;
@@ -32,7 +33,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 @InputRequirement(InputRequirement.Requirement.INPUT_REQUIRED)
@@ -46,8 +51,9 @@ import java.util.concurrent.atomic.AtomicReference;
         + "Near-Lossless, JPEG 2000) are written according to 'Output for Lossy Input', by default RLE Lossless, "
         + "to avoid a second generation loss. Lossy Image Compression (0028,2110) stays '01' and Ratio/Method "
         + "(0028,2112/2114) are preserved, completed and, on lossy re-encoding, extended (PS3.3 C.7.6.1.1.5). "
-        + "For YBR_FULL pixel data the RGB mask value is converted to YBR automatically. RLE Lossless is "
-        + "written by a built-in encoder (PS3.5 Annex G) because dcm4che only provides an RLE decoder.")
+        + "For YBR_FULL pixel data the RGB mask value is converted to YBR automatically. Native, RLE Lossless and JPEG Baseline "
+        + "instances are processed frame by frame in a single pass without temporary files; RLE (PS3.5 Annex G) "
+        + "and JPEG Baseline use built-in codecs. Other transfer syntaxes are transcoded via dcm4che.")
 @UseCase(description = "Masks burned-in annotations at the same configured image coordinates in every ultrasound frame.",
         inputRequirement = InputRequirement.Requirement.INPUT_REQUIRED)
 @WritesAttributes({
@@ -151,6 +157,18 @@ public class MaskMultiFrameUS extends AbstractProcessor {
             .addValidator(StandardValidators.BOOLEAN_VALIDATOR)
             .build();
 
+    public static final PropertyDescriptor FRAME_THREADS = new PropertyDescriptor.Builder()
+            .name("frame-threads")
+            .displayName("Frame Threads")
+            .description("Number of threads that decode, mask and encode the frames of one instance in parallel. "
+                    + "Only affects RLE and JPEG Baseline input or output; native input with native output is "
+                    + "limited by disk I/O. The pool is shared by all concurrent tasks of this processor. "
+                    + "1 processes frames sequentially.")
+            .required(true)
+            .defaultValue("1")
+            .addValidator(StandardValidators.createLongValidator(1, 64, true))
+            .build();
+
     public static final Relationship REL_SUCCESS = new Relationship.Builder()
             .name("success")
             .description("Validated and masked Ultrasound Multi-frame DICOM instance")
@@ -174,10 +192,12 @@ public class MaskMultiFrameUS extends AbstractProcessor {
     private volatile List<MaskRegion> regions;
     private volatile LossyOutput lossyOutput;
     private volatile boolean markCleanPixelData;
+    private volatile int frameThreads = 1;
+    private volatile ExecutorService frameExecutor;
 
     @Override
     protected void init(ProcessorInitializationContext context) {
-        descriptors = List.of(REGIONS, COLOR, LOSSY_OUTPUT, MARK_CLEAN_PIXEL_DATA);
+        descriptors = List.of(REGIONS, COLOR, LOSSY_OUTPUT, MARK_CLEAN_PIXEL_DATA, FRAME_THREADS);
         relationships = Set.of(REL_SUCCESS, REL_UNSUPPORTED, REL_FAILURE);
     }
 
@@ -186,6 +206,27 @@ public class MaskMultiFrameUS extends AbstractProcessor {
         regions = RegionMaskParser.parse(context.getProperty(REGIONS).getValue());
         lossyOutput = LossyOutput.valueOf(context.getProperty(LOSSY_OUTPUT).getValue());
         markCleanPixelData = context.getProperty(MARK_CLEAN_PIXEL_DATA).asBoolean();
+        frameThreads = context.getProperty(FRAME_THREADS).asInteger();
+        frameExecutor = frameThreads > 1 ? Executors.newFixedThreadPool(frameThreads, frameThreadFactory()) : null;
+    }
+
+    @OnStopped
+    public void onStopped() {
+        ExecutorService executor = frameExecutor;
+        frameExecutor = null;
+        if (executor != null) {
+            executor.shutdownNow();
+        }
+    }
+
+    private ThreadFactory frameThreadFactory() {
+        AtomicInteger counter = new AtomicInteger();
+        String prefix = "MaskMultiFrameUS-" + getIdentifier() + "-frame-";
+        return runnable -> {
+            Thread thread = new Thread(runnable, prefix + counter.incrementAndGet());
+            thread.setDaemon(true);
+            return thread;
+        };
     }
 
     @Override
@@ -210,7 +251,7 @@ public class MaskMultiFrameUS extends AbstractProcessor {
             int pixelValue = parseColor(context.getProperty(COLOR)
                     .evaluateAttributeExpressions(flowFile).getValue());
             MaskMultiFrameUSTransformer transformer = new MaskMultiFrameUSTransformer(
-                    pixelValue, regions, lossyOutput, markCleanPixelData);
+                    pixelValue, regions, lossyOutput, markCleanPixelData, frameExecutor, frameThreads);
 
             AtomicReference<MaskMultiFrameUSTransformer.Result> result = new AtomicReference<>();
             long start = System.nanoTime();

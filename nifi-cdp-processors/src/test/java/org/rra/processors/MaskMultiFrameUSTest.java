@@ -125,6 +125,28 @@ class MaskMultiFrameUSTest {
     }
 
     @Test
+    void masksAllFramesWithParallelFrameThreads() throws Exception {
+        testRunner.setProperty(MaskMultiFrameUS.FRAME_THREADS, "3");
+        int frames = 9;
+        byte[] pixels = new byte[ROWS * COLUMNS * frames];
+        Arrays.fill(pixels, (byte) 50);
+        testRunner.enqueue(createDicom(
+                MaskMultiFrameUSTransformer.ULTRASOUND_MULTI_FRAME_SOP_CLASS_UID,
+                frames, 1, "MONOCHROME2", pixels));
+        testRunner.run();
+
+        testRunner.assertAllFlowFilesTransferred(MaskMultiFrameUS.REL_SUCCESS, 1);
+        byte[] masked = readFully(testRunner.getFlowFilesForRelationship(
+                MaskMultiFrameUS.REL_SUCCESS).get(0).toByteArray())[1].getBytes(Tag.PixelData);
+        for (int frame = 0; frame < frames; frame++) {
+            int offset = frame * ROWS * COLUMNS;
+            assertEquals(50, masked[offset]);
+            assertEquals(0, masked[offset + 1], "Frame " + frame + " nicht maskiert");
+            assertEquals(50, masked[offset + 2]);
+        }
+    }
+
+    @Test
     void marksCleanPixelDataWhenEnabled() throws Exception {
         testRunner.setProperty(MaskMultiFrameUS.MARK_CLEAN_PIXEL_DATA, "true");
         testRunner.enqueue(createDicom(
