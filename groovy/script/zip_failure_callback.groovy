@@ -26,7 +26,12 @@
  *   3. invokehttp.java.exception.class set -> MANIFEST_UNREACHABLE
  *   4. fragment.count set (Create Series ZIP failure, bin incomplete
  *      after Max Bin Age)                  -> ZIP_INCOMPLETE
- *   5. otherwise                           -> ZIP_PACKAGING_FAILED
+ *   5. otherwise: NOT reported. Every error path of PACKAGE_ORDER sets
+ *      one of the attributes above; a FlowFile without them comes from a
+ *      normal relationship that was connected by mistake (e.g. "Response"
+ *      or "Original" of Get ZIP Manifest Entry). Reporting it would set a
+ *      healthy series to FAILED, so it goes to failure with
+ *      dcma.zip.report.error instead.
  *
  * Messages are technical texts from NiFi/backend; no PHI is added here.
  * Missing correlation attributes throw an exception: with Failure Strategy
@@ -99,8 +104,16 @@ if (zipErrorCode != null) {
     errorMessage = "Series ZIP not created: not all " + fragmentCount +
             " fragments arrived within Max Bin Age (Create Series ZIP)"
 } else {
-    errorCode = "ZIP_PACKAGING_FAILED"
-    errorMessage = "ZIP packaging failed"
+    String reason = "No error indicator on FlowFile (invokehttp.status.code=" +
+            (httpStatus ?: "none") + ", no dcma.zip.error.code, no fragment.count): " +
+            "probably connected from a non-error relationship, not reported"
+
+    log.error("ZIP failure not reported: orderId={}, retrieveId={}: {}",
+            [orderId, retrieveId, reason] as Object[])
+
+    flowFile = session.putAttribute(flowFile, "dcma.zip.report.error", reason)
+    session.transfer(flowFile, REL_FAILURE)
+    return
 }
 
 if (errorCode.length() > 50) {
