@@ -1,8 +1,13 @@
 /*
  * CGetSeriesFailed.groovy
  *
- * Input:  FlowFile from GetScu relationship "failure"
- *         (C-GET request of one series that did not finish successfully).
+ * Input:  FlowFile from
+ *           - GetScu relationship "failure" (C-GET did not finish), or
+ *           - SERIES RETRIEVED relationship "failure": the final C-GET
+ *             response was received but rejected by CGetSeriesResult
+ *             (e.g. status B000 with warnings, failed sub-operations,
+ *             0 completed instances); the reason is in
+ *             dcma.series.result.error.
  * Output: SERIES_RETRIEVE_FAILED event as JSON for
  *         POST #{dcma.api.url}/orders/${dcma.order.id}/events
  *
@@ -62,11 +67,12 @@ Integer failed = optionalInt("dcma.cget.failed")
 Integer warning = optionalInt("dcma.cget.warning")
 Integer expected = optionalInt("dcma.series.expected")
 
-// Diagnostic text only: GetScu error message and DIMSE error comment.
-// Must not contain PHI (no patient ID / name).
+// Diagnostic text only: GetScu error message, DIMSE error comment and the
+// rejection reason of CGetSeriesResult. Must not contain PHI (no patient ID / name).
 String message = [
         flowFile.getAttribute("dicom.get.error"),
-        flowFile.getAttribute("dcma.cget.error.comment")
+        flowFile.getAttribute("dcma.cget.error.comment"),
+        flowFile.getAttribute("dcma.series.result.error")
 ].findAll { it?.trim() }.join(" | ")
 
 if (message.length() > 1000) {
