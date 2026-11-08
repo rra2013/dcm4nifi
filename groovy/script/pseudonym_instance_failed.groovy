@@ -82,8 +82,10 @@ if (maskUnsupported != null) {
     errorCode = "PSEUDONYMIZE_FAILED"
     errorMessage = "Pseudonymisierung fehlgeschlagen: " + pseudonymizerError
 } else {
+    // z. B. Instance Complete "failure": ExecuteGroovyScript setzt ERROR_MESSAGE
+    String scriptError = optional("ERROR_MESSAGE")
     errorCode = "PROCESSING_FAILED"
-    errorMessage = "Instanzverarbeitung fehlgeschlagen"
+    errorMessage = "Instanzverarbeitung fehlgeschlagen" + (scriptError ? ": " + scriptError : "")
 }
 
 if (errorMessage.length() > 1000) {

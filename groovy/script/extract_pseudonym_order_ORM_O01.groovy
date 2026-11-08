@@ -210,15 +210,16 @@ try {
 
 } catch (Exception e) {
 
-    log.error(
-            "Failed to process HL7 ORM message",
-            e
-    )
+    log.error("Failed to process HL7 ORM message: {}", [e.message] as Object[])
 
-    // Roll back the entire session, including any
-    // generated FlowFiles, to avoid partial output.
-    session.rollback()
-
+    // No partial output: ExecuteGroovyScript ("transfer to failure") removes
+    // all series FlowFiles created above and routes the HL7 FlowFile alone to
+    // "failure".
+    // No session.rollback(): it returns the FlowFile to the input queue
+    // unpenalized (endless loop) and the Failure Strategy can no longer route
+    // it. Rethrowing lets ExecuteGroovyScript ("transfer to failure") discard
+    // the FlowFiles created here and route the original to "failure" with
+    // ERROR_MESSAGE / ERROR_STACKTRACE.
     throw e
 
 } finally {

@@ -103,7 +103,11 @@ try {
     session.transfer(flowFile, REL_SUCCESS)
 
 } catch (Exception e) {
-    log.error("Failed to create INSTANCE_COMPLETED callback", e)
-    session.rollback()
+    log.error("Failed to create INSTANCE_COMPLETED callback: {}", [e.message] as Object[])
+    // No session.rollback(): it returns the FlowFile to the input queue
+    // unpenalized (endless loop) and the Failure Strategy can no longer route
+    // it. Rethrowing lets ExecuteGroovyScript ("transfer to failure") discard
+    // the FlowFiles created here and route the original to "failure" with
+    // ERROR_MESSAGE / ERROR_STACKTRACE.
     throw e
 }
