@@ -7,7 +7,16 @@
  *             response was received but rejected by CGetSeriesResult
  *             (e.g. status B000 with warnings, failed sub-operations,
  *             0 completed instances); the reason is in
- *             dcma.series.result.error.
+ *             dcma.series.result.error, or
+ *           - FindScu relationship "not found": the series C-FIND
+ *             succeeded without a match (e.g. series deleted in the PACS);
+ *             dicom.find.result.count = 0, or
+ *           - FindScu relationship "failure" after the retries are used up
+ *             (PACS unreachable, non-success C-FIND status); the reason is
+ *             in dicom.find.error.
+ *         C-FIND inputs have no dcma.retrieve.id yet (GetScu never ran);
+ *         a new one is created and stored on the FlowFile, so InvokeHTTP
+ *         retries send the same retrieveId and eventId.
  * Output: SERIES_RETRIEVE_FAILED event as JSON for
  *         POST #{dcma.api.url}/orders/${dcma.order.id}/events
  *
@@ -52,7 +61,23 @@ def optionalInt = { String key ->
 String orderId = required("dcma.order.id")
 String studyUid = required("dcma.study.uid")
 String seriesUid = required("dcma.series.uid")
-String retrieveId = required("dcma.retrieve.id")
+
+// C-FIND path: GetScu did not run, so there is no retrieveId yet; this
+// script creates one and marks it with dcma.retrieve.source=C-FIND (a second
+// run on the same FlowFile builds the same event). A retrieveId without that
+// marker comes from GetScu: dicom.find.* are then leftovers and ignored.
+String retrieveId = flowFile.getAttribute("dcma.retrieve.id")?.trim()
+boolean findRetrieve = flowFile.getAttribute("dcma.retrieve.source") == "C-FIND"
+boolean readFind = !retrieveId || findRetrieve
+String findCount = readFind ? flowFile.getAttribute("dicom.find.result.count")?.trim() : null
+String findError = readFind ? flowFile.getAttribute("dicom.find.error")?.trim() : null
+boolean fromFind = findCount == "0" || findError
+if (!retrieveId) {
+    if (!fromFind) {
+        throw new IllegalArgumentException("Missing required attribute: dcma.retrieve.id")
+    }
+    retrieveId = UUID.randomUUID().toString()
+}
 
 UUID.fromString(orderId)
 UUID.fromString(retrieveId)
@@ -70,6 +95,8 @@ Integer expected = optionalInt("dcma.series.expected")
 // Diagnostic text only: GetScu error message, DIMSE error comment and the
 // rejection reason of CGetSeriesResult. Must not contain PHI (no patient ID / name).
 String message = [
+        findCount == "0" ? "C-FIND: series not found in PACS (0 matches)" : null,
+        findError ? "C-FIND failed: " + findError : null,
         flowFile.getAttribute("dicom.get.error"),
         flowFile.getAttribute("dcma.cget.error.comment"),
         flowFile.getAttribute("dcma.series.result.error")
@@ -105,13 +132,15 @@ flowFile = session.write(flowFile, { output -> output.write(json) } as OutputStr
 
 flowFile = session.putAllAttributes(flowFile, [
         "mime.type"            : "application/json",
+        "dcma.retrieve.id"     : retrieveId,
+        "dcma.retrieve.source" : fromFind ? "C-FIND" : "C-GET",
         "dcma.failure.event.id": eventId,
         "dcma.event.type"      : "SERIES_RETRIEVE_FAILED",
         "dcma.series.retrieve.status": "FAILED"
 ])
 
-log.warn("C-GET series failed: orderId={}, retrieveId={}, status={}, completed={}, failed={}, warning={}",
-        [orderId, retrieveId, status, completed, failed, warning] as Object[])
+log.warn("{} series failed: orderId={}, retrieveId={}, status={}, completed={}, failed={}, warning={}",
+        [fromFind ? "C-FIND" : "C-GET", orderId, retrieveId, status, completed, failed, warning] as Object[])
 
 session.transfer(flowFile, REL_SUCCESS)
 // Errors (missing correlation attributes) propagate: with

@@ -6,6 +6,8 @@ import org.apache.nifi.annotation.behavior.InputRequirement;
 import org.apache.nifi.annotation.behavior.SideEffectFree;
 import org.apache.nifi.annotation.behavior.SystemResource;
 import org.apache.nifi.annotation.behavior.SystemResourceConsideration;
+import org.apache.nifi.annotation.behavior.WritesAttribute;
+import org.apache.nifi.annotation.behavior.WritesAttributes;
 import org.apache.nifi.annotation.documentation.CapabilityDescription;
 import org.apache.nifi.annotation.documentation.Tags;
 import org.apache.nifi.annotation.documentation.UseCase;
@@ -29,6 +31,7 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.rra.dcmconfig.DcmConfig.LEVEL;
@@ -38,7 +41,13 @@ import static org.rra.dcmconfig.DcmConfig.LEVEL;
 @SystemResourceConsideration(resource = SystemResource.CPU)
 @Tags({"DICOM", "Find-SCU", "CDP"})
 @CapabilityDescription("Make C-Find query to remote SCP. There are three levels of query. patient/Study, Series and Image level. The input is the Flow File body as String. It will be interpreted in different level. " +
-        "In Pat/Study Level is the input the PatientID. In Series and Image level is the input the StudyIUID or (StudyIUID, SeriesIUID). The query result creates a flow file for each result item.")
+        "In Pat/Study Level is the input the PatientID. In Series and Image level is the input the StudyIUID or (StudyIUID, SeriesIUID). The query result creates a flow file for each result item. " +
+        "If the query succeeds without any match, the incoming flow file is routed unchanged to 'not found'.")
+@WritesAttributes({
+        @WritesAttribute(attribute = FindScu.RESULT_COUNT, description = "Number of C-FIND matches (0 on 'not found')."),
+        @WritesAttribute(attribute = FindScu.RESULT_INDEX, description = "0-based index of this match (success only)."),
+        @WritesAttribute(attribute = FindScu.FIND_ERROR, description = "Error message (failure only).")
+})
 @UseCase(description = "DICOM C-Find to query remote archives. Can be used for DICOM Query/Retrieve process.",
         inputRequirement = InputRequirement.Requirement.INPUT_REQUIRED)
 
@@ -46,6 +55,10 @@ public class FindScu extends AbstractProcessor {
     public static final String PATSTUDY_LEVEL = "PatientStudy";
     public static final String SERIES_LEVEL = "Series";
     public static final String IMAGE_LEVEL = "Image";
+
+    public static final String RESULT_COUNT = "dicom.find.result.count";
+    public static final String RESULT_INDEX = "dicom.find.result.index";
+    public static final String FIND_ERROR = "dicom.find.error";
 
     public static final PropertyDescriptor REMOTE_HOST = new PropertyDescriptor.Builder()
             .name("remote-address")
@@ -230,7 +243,18 @@ public class FindScu extends AbstractProcessor {
 
     public static final Relationship REL_FAILURE = new Relationship.Builder()
             .name("failure")
-            .description("Failed to send DICOM Data.").build();
+            .description("C-FIND could not be executed (connection, association, non-success status) " +
+                    "or the input is invalid; see " + FIND_ERROR + ".").build();
+
+    /**
+     * Without this relationship a query with zero matches emitted nothing and the
+     * incoming flow file was silently dropped, e.g. a series deleted in the PACS.
+     * Auto-terminate it to keep the old behaviour.
+     */
+    public static final Relationship REL_NOT_FOUND = new Relationship.Builder()
+            .name("not found")
+            .description("The C-FIND succeeded but returned no match. The incoming flow file is routed " +
+                    "unchanged, with " + RESULT_COUNT + "=0.").build();
 
     private List<PropertyDescriptor> descriptors;
     private Set<Relationship> relationships;
@@ -253,7 +277,7 @@ public class FindScu extends AbstractProcessor {
                 SND_BUFFER,
                 RCV_BUFFER
         );
-        relationships = Set.of(REL_SUCCESS, REL_FAILURE);
+        relationships = Set.of(REL_SUCCESS, REL_FAILURE, REL_NOT_FOUND);
     }
 
     @OnScheduled
@@ -352,25 +376,30 @@ public class FindScu extends AbstractProcessor {
             return;
         }
 
-        // C-FIND callbacks execute on a dcm4che thread. Do not access ProcessSession there.
-        List<org.dcm4che3.data.Attributes> results = new ArrayList<>();
+        List<org.dcm4che3.data.Attributes> results;
         try {
-            findSCU.doQuery(null, attributes -> {
-                synchronized (results) {
-                    results.add(new org.dcm4che3.data.Attributes(attributes));
-                }
-            });
+            results = executeQuery(findSCU);
         } catch (Exception e) {
             log.error("DICOM C-FIND failed", e);
-            flowFile = session.putAttribute(flowFile, "dicom.find.error", String.valueOf(e.getMessage()));
+            flowFile = session.putAttribute(flowFile, FIND_ERROR, String.valueOf(e.getMessage()));
             session.transfer(flowFile, REL_FAILURE);
+            return;
+        }
+
+        if (results.isEmpty()) {
+            // Only the level is logged: the input may be a PatientID.
+            log.warn("C-FIND on level {} returned no match; routing to '{}'", level, REL_NOT_FOUND.getName());
+            flowFile = session.putAttribute(flowFile, RESULT_COUNT, "0");
+            session.transfer(flowFile, REL_NOT_FOUND);
             return;
         }
 
         // The query has finished. Only now create and transfer FlowFiles on this thread.
         List<FlowFile> created = new ArrayList<>();
+        String count = String.valueOf(results.size());
         try {
-            for (org.dcm4che3.data.Attributes attributes : results) {
+            for (int index = 0; index < results.size(); index++) {
+                org.dcm4che3.data.Attributes attributes = results.get(index);
                 FlowFile item = session.create(flowFile);
                 created.add(item);
                 item = session.write(item, outputStream -> {
@@ -379,7 +408,12 @@ public class FindScu extends AbstractProcessor {
                     bos.flush();
                 });
                 created.set(created.size() - 1, item);
-                item = session.putAttribute(item, CoreAttributes.MIME_TYPE.key(), "application/dicom");
+                // An error of an earlier, retried attempt does not belong to the match.
+                item = session.removeAttribute(item, FIND_ERROR);
+                item = session.putAllAttributes(item, Map.of(
+                        CoreAttributes.MIME_TYPE.key(), "application/dicom",
+                        RESULT_COUNT, count,
+                        RESULT_INDEX, String.valueOf(index)));
                 created.set(created.size() - 1, item);
             }
             for (FlowFile item : created) {
@@ -391,10 +425,26 @@ public class FindScu extends AbstractProcessor {
             for (FlowFile item : created) {
                 session.remove(item);
             }
-            flowFile = session.putAttribute(flowFile, "dicom.find.error", String.valueOf(e.getMessage()));
+            flowFile = session.putAttribute(flowFile, FIND_ERROR, String.valueOf(e.getMessage()));
             session.transfer(flowFile, REL_FAILURE);
         }
 
+    }
+
+    /**
+     * Runs the query and collects all matches. C-FIND callbacks execute on a dcm4che
+     * thread, so the ProcessSession must not be used there. Protected for tests.
+     */
+    protected List<org.dcm4che3.data.Attributes> executeQuery(NifiFindScu findSCU) throws Exception {
+        List<org.dcm4che3.data.Attributes> results = new ArrayList<>();
+        findSCU.doQuery(null, attributes -> {
+            synchronized (results) {
+                results.add(new org.dcm4che3.data.Attributes(attributes));
+            }
+        });
+        synchronized (results) {
+            return new ArrayList<>(results);
+        }
     }
 
     @Override
