@@ -1,6 +1,22 @@
+/*
+ * validate_series_zip_file.groovy
+ *
+ * Prüft das Serien-ZIP gegen das Manifest des Backends im Attribut
+ * dcma.zip.manifest.json. Zwei Formen:
+ *   - Zusammenfassung (GET .../zip-manifest/summary, empfohlen):
+ *     {orderId, retrieveId, fragmentCount, entryNamesSha256}
+ *     entryNamesSha256 = SHA-256 (hex) der aufsteigend sortierten
+ *     ZIP-Eintragsnamen, mit "\n" verbunden, UTF-8.
+ *   - Vollständiges Manifest (GET .../zip-manifest) mit entries[]: nur für
+ *     kleine Serien; bei vielen tausend Instanzen ist die Antwort grösser
+ *     als die "Response Body Attribute Size" von InvokeHTTP und wird
+ *     abgeschnitten.
+ */
 import groovy.json.JsonSlurper
 import org.apache.nifi.processor.io.InputStreamCallback
 
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipException
 
@@ -18,7 +34,15 @@ try {
         )
     }
 
-    def manifest = new JsonSlurper().parseText(json)
+    def manifest
+    try {
+        manifest = new JsonSlurper().parseText(json)
+    } catch (Exception parseError) {
+        // Meist abgeschnittene Antwort (Response Body Attribute Size zu klein)
+        throw new IllegalStateException(
+                "ZIP manifest is not valid JSON (length ${json.length()}); " +
+                        "use .../zip-manifest/summary or a larger Response Body Attribute Size")
+    }
 
     String orderId = flowFile.getAttribute("dcma.order.id")
     String retrieveId = flowFile.getAttribute("dcma.retrieve.id")
@@ -36,24 +60,32 @@ try {
         )
     }
 
-    if (!(manifest.entries instanceof List)) {
-        throw new IllegalStateException(
-                "Missing manifest entries"
-        )
-    }
-
     int expectedCount = manifest.fragmentCount as int
+    String expectedHash = manifest.entryNamesSha256?.toString()?.toLowerCase()
+    Set<String> expectedNames = null
 
-    Set<String> expectedNames = manifest.entries.collect {
-        it.zipEntryName.toString()
-    }.toSet()
+    if (expectedHash) {
+        if (expectedCount <= 0 || !(expectedHash ==~ /[0-9a-f]{64}/)) {
+            throw new IllegalStateException("Invalid ZIP manifest summary")
+        }
+    } else {
+        if (!(manifest.entries instanceof List)) {
+            throw new IllegalStateException(
+                    "Missing manifest entries"
+            )
+        }
 
-    if (expectedCount <= 0 ||
-            manifest.entries.size() != expectedCount ||
-            expectedNames.size() != expectedCount) {
-        throw new IllegalStateException(
-                "Invalid ZIP manifest entries"
-        )
+        expectedNames = manifest.entries.collect {
+            it.zipEntryName.toString()
+        }.toSet()
+
+        if (expectedCount <= 0 ||
+                manifest.entries.size() != expectedCount ||
+                expectedNames.size() != expectedCount) {
+            throw new IllegalStateException(
+                    "Invalid ZIP manifest entries"
+            )
+        }
     }
 
     Set<String> actualNames = new HashSet<>()
@@ -102,13 +134,22 @@ try {
         )
     }
 
-    if (actualNames != expectedNames) {
+    if (expectedHash) {
+        String joined = actualNames.toList().sort().join("\n")
+        String actualHash = MessageDigest.getInstance("SHA-256")
+                .digest(joined.getBytes(StandardCharsets.UTF_8))
+                .encodeHex().toString()
+        if (actualHash != expectedHash) {
+            throw new IllegalStateException(
+                    "ZIP entry names do not match manifest (SHA-256 mismatch, ${actualNames.size()} entries)")
+        }
+    } else if (actualNames != expectedNames) {
         Set<String> missing = expectedNames - actualNames
         Set<String> unexpected = actualNames - expectedNames
 
         throw new IllegalStateException(
                 "ZIP contents do not match manifest. " +
-                        "Missing=${missing}, Unexpected=${unexpected}"
+                        "Missing=${missing.take(20)}, Unexpected=${unexpected.take(20)}"
         )
     }
 
@@ -138,7 +179,7 @@ try {
             "dcma.zip.validated"     : "false",
             "dcma.zip.error.code"    : "ZIP_VALIDATION_FAILED",
             "dcma.zip.error.message" :
-                    (e.message ?: e.toString()).take(2000),
+                    (e.message ?: e.toString()).take(1000),
             "dcma.zip.error.class"   :
                     e.getClass().getName()
     ])
