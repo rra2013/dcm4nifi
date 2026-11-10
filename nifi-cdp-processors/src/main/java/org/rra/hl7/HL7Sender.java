@@ -21,9 +21,13 @@ public class HL7Sender {
     public static String send(String host, int port, String msg) throws HL7Exception, LLPException, IOException {
         Message message = context.getPipeParser().parse(msg);
         Connection connection = context.newClient(host, port, useTls);
-        Initiator initiator = connection.getInitiator();
-        Message response = initiator.sendAndReceive(message);
-        connection.close();
-        return context.getPipeParser().encode(response);
+        try {
+            Initiator initiator = connection.getInitiator();
+            Message response = initiator.sendAndReceive(message);
+            return context.getPipeParser().encode(response);
+        } finally {
+            // always close, otherwise a broken connection stays cached in the ConnectionHub
+            connection.close();
+        }
     };
 }
