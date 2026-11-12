@@ -46,6 +46,8 @@ import static org.rra.dcmconfig.DcmConfig.LEVEL;
 @WritesAttributes({
         @WritesAttribute(attribute = FindScu.RESULT_COUNT, description = "Number of C-FIND matches (0 on 'not found')."),
         @WritesAttribute(attribute = FindScu.RESULT_INDEX, description = "0-based index of this match (success only)."),
+        @WritesAttribute(attribute = FindScu.SERIES_INSTANCES, description = "NumberOfSeriesRelatedInstances (0020,1209) of this match, "
+                + "if the SCP returned it (success only)."),
         @WritesAttribute(attribute = FindScu.FIND_ERROR, description = "Error message (failure only).")
 })
 @UseCase(description = "DICOM C-Find to query remote archives. Can be used for DICOM Query/Retrieve process.",
@@ -59,6 +61,7 @@ public class FindScu extends AbstractProcessor {
     public static final String RESULT_COUNT = "dicom.find.result.count";
     public static final String RESULT_INDEX = "dicom.find.result.index";
     public static final String FIND_ERROR = "dicom.find.error";
+    public static final String SERIES_INSTANCES = "dicom.find.series.instances";
 
     public static final PropertyDescriptor REMOTE_HOST = new PropertyDescriptor.Builder()
             .name("remote-address")
@@ -410,6 +413,12 @@ public class FindScu extends AbstractProcessor {
                 created.set(created.size() - 1, item);
                 // An error of an earlier, retried attempt does not belong to the match.
                 item = session.removeAttribute(item, FIND_ERROR);
+                // Expected instances of the series, e.g. for the C-GET result;
+                // only if the SCP returned a valid count.
+                String instances = seriesInstances(attributes);
+                item = instances == null
+                        ? session.removeAttribute(item, SERIES_INSTANCES)
+                        : session.putAttribute(item, SERIES_INSTANCES, instances);
                 item = session.putAllAttributes(item, Map.of(
                         CoreAttributes.MIME_TYPE.key(), "application/dicom",
                         RESULT_COUNT, count,
@@ -429,6 +438,15 @@ public class FindScu extends AbstractProcessor {
             session.transfer(flowFile, REL_FAILURE);
         }
 
+    }
+
+    /** NumberOfSeriesRelatedInstances as text, or null if absent or invalid. */
+    static String seriesInstances(org.dcm4che3.data.Attributes attributes) {
+        if (!attributes.containsValue(org.dcm4che3.data.Tag.NumberOfSeriesRelatedInstances)) {
+            return null;
+        }
+        int count = attributes.getInt(org.dcm4che3.data.Tag.NumberOfSeriesRelatedInstances, -1);
+        return count < 0 ? null : String.valueOf(count);
     }
 
     /**

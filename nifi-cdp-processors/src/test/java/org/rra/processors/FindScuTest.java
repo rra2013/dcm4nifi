@@ -195,6 +195,20 @@ public class FindScuTest {
     }
 
     @Test
+    public void passesNumberOfSeriesRelatedInstancesOn() {
+        Attributes withCount = seriesMatch(SERIES);
+        withCount.setInt(Tag.NumberOfSeriesRelatedInstances, VR.IS, 5240);
+        Attributes withoutCount = seriesMatch(SERIES + ".2");
+        TestRunner runner = seriesRunner(new StubFindScu(List.of(withCount, withoutCount), null));
+
+        runner.run();
+
+        List<MockFlowFile> matches = runner.getFlowFilesForRelationship(REL_SUCCESS);
+        matches.get(0).assertAttributeEquals(SERIES_INSTANCES, "5240");
+        matches.get(1).assertAttributeNotExists(SERIES_INSTANCES);
+    }
+
+    @Test
     public void routesQueryErrorToFailureWithMessage() {
         TestRunner runner = seriesRunner(new StubFindScu(
                 null, new java.io.IOException("C-FIND final status: 0xA700")));

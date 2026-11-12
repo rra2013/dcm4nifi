@@ -90,7 +90,11 @@ if (status != null && !status.matches("[0-9A-F]{4}")) {
 Integer completed = optionalInt("dcma.cget.completed")
 Integer failed = optionalInt("dcma.cget.failed")
 Integer warning = optionalInt("dcma.cget.warning")
+// Expected instances from the series-level C-FIND (FindScu), if known
 Integer expected = optionalInt("dcma.series.expected")
+if (expected == null) {
+    expected = optionalInt("dicom.find.series.instances")
+}
 
 // Diagnostic text only: GetScu error message, DIMSE error comment and the
 // rejection reason of CGetSeriesResult. Must not contain PHI (no patient ID / name).

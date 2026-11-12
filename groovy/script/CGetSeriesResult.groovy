@@ -129,12 +129,18 @@ try {
     // --------------------------------------------------
     // 6. Read optional expected instance count
     //
-    // This attribute may originate from C-FIND:
-    // NumberOfSeriesRelatedInstances (0020,1209)
+    // NumberOfSeriesRelatedInstances (0020,1209) from the
+    // series-level C-FIND: FindScu writes it as
+    // dicom.find.series.instances; dcma.series.expected
+    // (if set in the flow) takes precedence.
     // --------------------------------------------------
 
     String expectedValue =
             flowFile.getAttribute("dcma.series.expected")
+
+    if (expectedValue == null || expectedValue.isBlank()) {
+        expectedValue = flowFile.getAttribute("dicom.find.series.instances")
+    }
 
     Integer expected = null
 
