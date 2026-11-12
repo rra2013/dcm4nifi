@@ -12,12 +12,16 @@ import org.apache.nifi.logging.ComponentLog;
 import org.apache.nifi.processor.*;
 import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.util.StandardValidators;
-import org.rra.cstore.NifiStoreSCU;
+import org.rra.cstore.DicomStoreBatch;
+import org.rra.cstore.DicomStoreBatch.Destination;
+import org.rra.cstore.DicomStoreBatch.Result;
 import org.rra.dcmconfig.DcmConfig;
 
-import java.io.BufferedInputStream;
-import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @SupportsBatching
@@ -33,8 +37,11 @@ import java.util.Set;
                 "allowing the remote hostname, port, Called AE Title, and Calling AE Title " +
                 "to be resolved individually for each FlowFile. " +
                 "Provides configurable DICOM association, network timeout, and socket settings. " +
-                "Routes successfully transmitted DICOM instances to 'success' and failed " +
-                "transmissions to 'failure', including diagnostic error attributes."
+                "Up to 'Batch Size' FlowFiles per run are sent; FlowFiles with the same destination " +
+                "share one association. A FlowFile goes to 'success' only if the SCP answered its " +
+                "C-STORE with Success or a Warning status; everything else (failure status, SOP class " +
+                "or transfer syntax not accepted, association rejected or lost, invalid DICOM) goes " +
+                "to 'failure' with an error code. Nothing is transcoded or skipped silently."
 )
 
 @UseCase(
@@ -63,15 +70,50 @@ import java.util.Set;
 
 @WritesAttributes({
         @WritesAttribute(
-                attribute = "dicom.store.error",
-                description = "Error message describing why the DICOM C-STORE operation failed."
+                attribute = StoreScu.STORE_STATUS,
+                description = "DIMSE status of the C-STORE-RSP as 4 hex digits (e.g. 0000, B000, A700); "
+                        + "missing if no response was received."
         ),
         @WritesAttribute(
-                attribute = "dicom.store.error.type",
-                description = "Java exception class name identifying the type of C-STORE failure."
+                attribute = StoreScu.STORE_WARNING,
+                description = "Warning comment of the SCP (success with warning status only)."
+        ),
+        @WritesAttribute(
+                attribute = StoreScu.STORE_ERROR_CODE,
+                description = "Failure only: INVALID_DICOM, CONFIG_INVALID, CONNECTION_FAILED, "
+                        + "ASSOCIATION_REJECTED, NO_PRESENTATION_CONTEXT, TRANSFER_SYNTAX_NOT_ACCEPTED, "
+                        + "STORE_REJECTED or ASSOCIATION_ABORTED."
+        ),
+        @WritesAttribute(
+                attribute = StoreScu.STORE_ERROR,
+                description = "Failure only: error message describing why the C-STORE failed."
+        ),
+        @WritesAttribute(
+                attribute = StoreScu.STORE_ERROR_TYPE,
+                description = "Failure only: same as dicom.store.error.code (kept for existing flows)."
         )
 })
 public class StoreScu extends AbstractProcessor {
+
+    public static final String STORE_STATUS = "dicom.store.status";
+    public static final String STORE_WARNING = "dicom.store.warning";
+    public static final String STORE_ERROR_CODE = "dicom.store.error.code";
+    public static final String STORE_ERROR = "dicom.store.error";
+    public static final String STORE_ERROR_TYPE = "dicom.store.error.type";
+
+    /** Destination properties could not be evaluated for a FlowFile (e.g. port not a number). */
+    public static final String CONFIG_INVALID = "CONFIG_INVALID";
+
+    public static final PropertyDescriptor BATCH_SIZE = new PropertyDescriptor.Builder()
+            .name("batch-size")
+            .displayName("Batch Size")
+            .description("Maximum number of FlowFiles sent per run. FlowFiles with the same destination "
+                    + "(host, port, Called and Calling AE Title) share one DICOM association; each "
+                    + "FlowFile still gets its own C-STORE and its own result.")
+            .required(true)
+            .defaultValue("50")
+            .addValidator(StandardValidators.createLongValidator(1, 1000, true))
+            .build();
 
     public static final PropertyDescriptor REMOTE_HOST = new PropertyDescriptor.Builder()
             .name("remote-address")
@@ -120,7 +162,8 @@ public class StoreScu extends AbstractProcessor {
     public static final PropertyDescriptor NOT_ASYNC = new PropertyDescriptor.Builder()
             .name("not-async")
             .displayName("Not Async")
-            .description("Do not use asynchronous mode")
+            .description("Ignored: C-STOREs are always sent one at a time, so that every response "
+                    + "belongs to exactly one FlowFile.")
             .required(true)
             .allowableValues("true", "false")
             .defaultValue("false")
@@ -259,6 +302,7 @@ public class StoreScu extends AbstractProcessor {
     @Override
     protected void init(final ProcessorInitializationContext context) {
         descriptors = List.of(REMOTE_HOST, PORT, CALLED_AET, CALLING_AET,
+                BATCH_SIZE,
                 NOT_ASYNC,
                 NOT_PACK_PDV,
                 TCP_DELAY,
@@ -284,16 +328,74 @@ public class StoreScu extends AbstractProcessor {
 
     @Override
     public void onTrigger(ProcessContext context, ProcessSession session) throws ProcessException {
-        FlowFile flowFile = session.get();
-        if (flowFile == null) {
+        int batchSize = context.getProperty(BATCH_SIZE).asInteger();
+        List<FlowFile> flowFiles = session.get(batchSize);
+        if (flowFiles.isEmpty()) {
             return;
         }
         final ComponentLog log = getLogger();
-        log.info("+ + + On Data from AET: {} + + +", flowFile.getAttribute("CallingAET"));
-        String called_aet = context.getProperty(CALLED_AET).evaluateAttributeExpressions(flowFile).getValue();
-        String calling_aet = context.getProperty(CALLING_AET).evaluateAttributeExpressions(flowFile).getValue();
-        String remoteHost = context.getProperty(REMOTE_HOST).evaluateAttributeExpressions(flowFile).getValue();
-        int port = context.getProperty(PORT).evaluateAttributeExpressions(flowFile).asInteger();
+
+        // Group by destination, keeping the order of the FlowFiles
+        Map<Destination, List<FlowFile>> groups = new LinkedHashMap<>();
+        for (FlowFile flowFile : flowFiles) {
+            Destination destination;
+            try {
+                destination = destination(context, flowFile);
+            } catch (RuntimeException e) {
+                log.error("Invalid C-STORE destination for {}: {}", flowFile, e.getMessage());
+                fail(session, flowFile, CONFIG_INVALID,
+                        "Invalid destination: " + e.getMessage(), -1);
+                continue;
+            }
+            groups.computeIfAbsent(destination, d -> new ArrayList<>()).add(flowFile);
+        }
+
+        DicomStoreBatch sender = new DicomStoreBatch(dcmConfig(context));
+        for (Map.Entry<Destination, List<FlowFile>> group : groups.entrySet()) {
+            List<FlowFile> members = group.getValue();
+            List<DicomStoreBatch.Instance> instances = new ArrayList<>(members.size());
+            for (FlowFile flowFile : members) {
+                instances.add(() -> session.read(flowFile));
+            }
+
+            List<Result> results = sender.send(group.getKey(), instances);
+
+            int stored = 0;
+            for (int i = 0; i < members.size(); i++) {
+                FlowFile flowFile = members.get(i);
+                Result result = results.get(i);
+                if (result.stored()) {
+                    stored++;
+                    succeed(session, flowFile, result, group.getKey());
+                } else {
+                    fail(session, flowFile, result.errorCode(), result.message(), result.status());
+                }
+            }
+            if (stored < members.size()) {
+                log.warn("C-STORE to {}: {} of {} instances stored, {} failed",
+                        group.getKey(), stored, members.size(), members.size() - stored);
+            } else {
+                log.debug("C-STORE to {}: {} instances stored", group.getKey(), stored);
+            }
+        }
+    }
+
+    /** Host, port and AE Titles of one FlowFile (Expression Language). */
+    static Destination destination(ProcessContext context, FlowFile flowFile) {
+        String host = context.getProperty(REMOTE_HOST).evaluateAttributeExpressions(flowFile).getValue();
+        String port = context.getProperty(PORT).evaluateAttributeExpressions(flowFile).getValue();
+        String called = context.getProperty(CALLED_AET).evaluateAttributeExpressions(flowFile).getValue();
+        String calling = context.getProperty(CALLING_AET).evaluateAttributeExpressions(flowFile).getValue();
+        int portNumber;
+        try {
+            portNumber = Integer.parseInt(port == null ? "" : port.trim());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("port is not a number: '" + port + "'");
+        }
+        return new Destination(host == null ? "localhost" : host, portNumber, calling, called);
+    }
+
+    private static DcmConfig dcmConfig(ProcessContext context) {
         DcmConfig dcmConfig = new DcmConfig();
         dcmConfig.NOT_ASYNC = context.getProperty(NOT_ASYNC).asBoolean();
         dcmConfig.NOT_PACK_PDV = context.getProperty(NOT_PACK_PDV).asBoolean();
@@ -308,35 +410,37 @@ public class StoreScu extends AbstractProcessor {
         dcmConfig.IDLE_TIMEOUT = context.getProperty(IDLE_TIMEOUT).asInteger();
         dcmConfig.SND_BUFFER = context.getProperty(SND_BUFFER).asInteger();
         dcmConfig.RCV_BUFFER = context.getProperty(RCV_BUFFER).asInteger();
+        return dcmConfig;
+    }
 
-
-
-        try {
-            try (InputStream inputStream = session.read(flowFile)) {
-                try (BufferedInputStream bis = new BufferedInputStream(inputStream)) {
-                    new NifiStoreSCU(remoteHost, port, calling_aet, called_aet, bis, dcmConfig);
-                }
-            } catch (Exception e) {
-                throw e;
-            }
-            session.transfer(flowFile, REL_SUCCESS);
-        } catch (Exception e) {
-            log.error("DICOM C-STORE failed to {}:{} AET={}",
-                    remoteHost, port, called_aet, e);
-            flowFile = session.putAttribute(
-                    flowFile,
-                    "dicom.store.error",
-                    e.getMessage() != null
-                            ? e.getMessage()
-                            : e.getClass().getSimpleName()
-            );
-            flowFile = session.putAttribute(
-                    flowFile,
-                    "dicom.store.error.type",
-                    e.getClass().getSimpleName()
-            );
-            session.transfer(flowFile, REL_FAILURE);
+    private static void succeed(ProcessSession session, FlowFile flowFile, Result result, Destination destination) {
+        // Errors of an earlier, retried attempt do not belong to this result
+        flowFile = session.removeAllAttributes(flowFile,
+                Set.of(STORE_ERROR_CODE, STORE_ERROR, STORE_ERROR_TYPE, STORE_WARNING));
+        Map<String, String> attributes = new HashMap<>();
+        attributes.put(STORE_STATUS, String.format("%04X", result.status() & 0xFFFF));
+        if (result.outcome() == DicomStoreBatch.Outcome.WARNING && result.message() != null) {
+            attributes.put(STORE_WARNING, result.message());
         }
+        flowFile = session.putAllAttributes(flowFile, attributes);
+        session.getProvenanceReporter().send(flowFile,
+                "dicom://" + destination.calledAet() + "@" + destination.host() + ":" + destination.port());
+        session.transfer(flowFile, REL_SUCCESS);
+    }
+
+    private static void fail(ProcessSession session, FlowFile flowFile, String code, String message, int status) {
+        Map<String, String> attributes = new HashMap<>();
+        attributes.put(STORE_ERROR_CODE, code);
+        attributes.put(STORE_ERROR_TYPE, code);
+        attributes.put(STORE_ERROR, message == null ? code : message);
+        flowFile = session.removeAllAttributes(flowFile, Set.of(STORE_STATUS, STORE_WARNING));
+        if (status >= 0) {
+            attributes.put(STORE_STATUS, String.format("%04X", status & 0xFFFF));
+        }
+        flowFile = session.putAllAttributes(flowFile, attributes);
+        // Retries via RetryFlowFile do not hammer an unavailable SCP
+        flowFile = session.penalize(flowFile);
+        session.transfer(flowFile, REL_FAILURE);
     }
 
     @Override
