@@ -2,6 +2,7 @@ package org.rra.cstore;
 
 import org.dcm4che3.data.Attributes;
 import org.dcm4che3.data.Tag;
+import org.dcm4che3.data.UID;
 import org.dcm4che3.io.DicomInputStream;
 import org.dcm4che3.net.ApplicationEntity;
 import org.dcm4che3.net.Association;
@@ -34,14 +35,22 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
 /**
- * Sends several DICOM Part-10 instances to one Storage SCP over a single
+ * Sends several DICOM instances to one Storage SCP over a single
  * association and reports the outcome of every instance separately.
+ *
+ * <p>Input is a Part-10 file or a bare data set without file meta
+ * information, as GetScu and the pseudonymizer of dcm4nifi write it. For a
+ * bare data set SOP Class and Instance UID come from the data set and the
+ * transfer syntax from its encoding (implicit/explicit VR); encapsulated
+ * (compressed) pixel data additionally needs the transfer syntax as
+ * {@link Instance#transferSyntaxHint()}, otherwise the instance fails.</p>
  *
  * <p>An instance counts as stored only if the SCP answered the C-STORE with
  * Success or a Warning status. Everything else is a failure with an error
  * code, never silently skipped:</p>
  * <ul>
- *   <li>{@link #INVALID_DICOM}: no readable Part-10 header</li>
+ *   <li>{@link #INVALID_DICOM}: neither a readable Part-10 header nor a data
+ *       set with SOP Class/Instance UID and a known transfer syntax</li>
  *   <li>{@link #CONNECTION_FAILED}: SCP not reachable, timeout</li>
  *   <li>{@link #ASSOCIATION_REJECTED}: SCP rejected the association (e.g. unknown Called AE)</li>
  *   <li>{@link #NO_PRESENTATION_CONTEXT}: SOP class not accepted</li>
@@ -100,6 +109,16 @@ public final class DicomStoreBatch {
     @FunctionalInterface
     public interface Instance {
         InputStream open() throws IOException;
+
+        /**
+         * Transfer syntax of a data set without file meta information, e.g.
+         * the FlowFile attribute TransferSyntax set by GetScu. Only used for
+         * encapsulated pixel data; the encoding of native data is read from
+         * the data itself (the pseudonymizer re-encodes it).
+         */
+        default String transferSyntaxHint() {
+            return null;
+        }
     }
 
     public enum Outcome { SUCCESS, WARNING, FAILED }
@@ -128,8 +147,23 @@ public final class DicomStoreBatch {
         }
     }
 
-    /** SOP class, instance and transfer syntax from the Part-10 header. */
-    record Header(int index, String cuid, String iuid, String tsuid) {}
+    /**
+     * SOP class, instance and transfer syntax of one instance.
+     *
+     * @param part10 true: file meta information is skipped when sending;
+     *               false: the stream is sent as it is (bare data set)
+     */
+    record Header(int index, String cuid, String iuid, String tsuid, boolean part10) {
+
+        Header(int index, String cuid, String iuid, String tsuid) {
+            this(index, cuid, iuid, tsuid, true);
+        }
+    }
+
+    /** Transfer syntaxes without encapsulated pixel data. */
+    private static final Set<String> NATIVE = Set.of(
+            UID.ImplicitVRLittleEndian, UID.ExplicitVRLittleEndian, UID.ExplicitVRBigEndian,
+            UID.DeflatedExplicitVRLittleEndian);
 
     private final DcmConfig cfg;
 
@@ -217,7 +251,7 @@ public final class DicomStoreBatch {
              DicomInputStream dis = new DicomInputStream(in)) {
             Attributes fmi = dis.readFileMetaInformation();
             if (fmi == null) {
-                throw new InvalidDicomException("No DICOM file meta information (Part-10 header)");
+                return bareDataSet(index, dis, instance.transferSyntaxHint());
             }
             String cuid = fmi.getString(Tag.MediaStorageSOPClassUID);
             String iuid = fmi.getString(Tag.MediaStorageSOPInstanceUID);
@@ -230,6 +264,33 @@ public final class DicomStoreBatch {
         } catch (IOException | RuntimeException e) {
             throw new InvalidDicomException("Not a readable DICOM file: " + describe(e));
         }
+    }
+
+    /** Data set without file meta information (GetScu, pseudonymizer). */
+    private static Header bareDataSet(int index, DicomInputStream dis, String hint)
+            throws IOException, InvalidDicomException {
+        dis.setIncludeBulkData(DicomInputStream.IncludeBulkData.NO);
+        Attributes ds = dis.readDatasetUntilPixelData();
+        String cuid = ds.getString(Tag.SOPClassUID);
+        String iuid = ds.getString(Tag.SOPInstanceUID);
+        if (cuid == null || iuid == null) {
+            throw new InvalidDicomException(
+                    "No DICOM file meta information (Part-10 header) and no SOP Class/Instance UID in the data set");
+        }
+        String encoding = dis.getTransferSyntax();
+        boolean encapsulated = dis.tag() == Tag.PixelData && dis.length() == -1;
+        if (!encapsulated) {
+            return new Header(index, cuid, iuid, encoding, false);
+        }
+        String tsuid = hint == null ? "" : hint.trim();
+        if (tsuid.isEmpty() || NATIVE.contains(tsuid)) {
+            throw new InvalidDicomException("Compressed pixel data without file meta information: "
+                    + "transfer syntax unknown (TransferSyntax attribute: " + (tsuid.isEmpty() ? "none" : tsuid) + ")");
+        }
+        if (!UID.ExplicitVRLittleEndian.equals(encoding)) {
+            throw new InvalidDicomException("Compressed pixel data in a data set encoded as " + encoding);
+        }
+        return new Header(index, cuid, iuid, tsuid, false);
     }
 
     private void sendChunk(Destination destination, List<? extends Instance> instances,
@@ -318,11 +379,15 @@ public final class DicomStoreBatch {
                             + " for SOP Class " + header.cuid(), header.iuid());
         }
 
-        try (InputStream in = instance.open();
-             DicomInputStream dis = new DicomInputStream(in)) {
-            dis.readFileMetaInformation();
+        try (InputStream in = instance.open()) {
+            InputStream data = in;
+            if (header.part10()) {
+                DicomInputStream dis = new DicomInputStream(in);
+                dis.readFileMetaInformation();
+                data = dis;
+            }
             DimseRSP rsp = as.cstore(header.cuid(), header.iuid(), Priority.NORMAL,
-                    new InputStreamDataWriter(dis), header.tsuid());
+                    new InputStreamDataWriter(data), header.tsuid());
             if (!rsp.next()) {
                 return Result.failed(ASSOCIATION_ABORTED, "No C-STORE response", header.iuid());
             }

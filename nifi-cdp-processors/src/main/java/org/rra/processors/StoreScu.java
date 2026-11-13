@@ -17,6 +17,7 @@ import org.rra.cstore.DicomStoreBatch.Destination;
 import org.rra.cstore.DicomStoreBatch.Result;
 import org.rra.dcmconfig.DcmConfig;
 
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -65,6 +66,11 @@ import java.util.Set;
         @ReadsAttribute(
                 attribute = "pacs.aet",
                 description = "Optional FlowFile attribute used to dynamically resolve the Called AE Title."
+        ),
+        @ReadsAttribute(
+                attribute = StoreScu.TRANSFER_SYNTAX,
+                description = "Transfer syntax set by GetScu. Needed only for a data set without file meta "
+                        + "information that has compressed (encapsulated) pixel data."
         )
 })
 
@@ -94,6 +100,9 @@ import java.util.Set;
         )
 })
 public class StoreScu extends AbstractProcessor {
+
+    /** Written by GetScu: transfer syntax of the received data set. */
+    public static final String TRANSFER_SYNTAX = "TransferSyntax";
 
     public static final String STORE_STATUS = "dicom.store.status";
     public static final String STORE_WARNING = "dicom.store.warning";
@@ -355,7 +364,17 @@ public class StoreScu extends AbstractProcessor {
             List<FlowFile> members = group.getValue();
             List<DicomStoreBatch.Instance> instances = new ArrayList<>(members.size());
             for (FlowFile flowFile : members) {
-                instances.add(() -> session.read(flowFile));
+                instances.add(new DicomStoreBatch.Instance() {
+                    @Override
+                    public InputStream open() {
+                        return session.read(flowFile);
+                    }
+
+                    @Override
+                    public String transferSyntaxHint() {
+                        return flowFile.getAttribute(TRANSFER_SYNTAX);
+                    }
+                });
             }
 
             List<Result> results = sender.send(group.getKey(), instances);

@@ -1,6 +1,10 @@
 package org.rra.cstore;
 
+import org.dcm4che3.data.Attributes;
+import org.dcm4che3.data.Tag;
 import org.dcm4che3.data.UID;
+import org.dcm4che3.data.VR;
+import org.dcm4che3.io.DicomInputStream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.rra.cstore.DicomStoreBatch.Destination;
@@ -318,6 +322,137 @@ public class DicomStoreBatchTest {
         String summary = DicomStoreBatch.failureSummary(List.of(
                 Result.failed(DicomStoreBatch.ASSOCIATION_ABORTED, "x".repeat(1000), "2.25.1")));
         assertEquals("ASSOCIATION_ABORTED x1 (" + "x".repeat(300) + "...)", summary);
+    }
+
+    // --------------------------------------------------
+    // Data sets without file meta information (GetScu, pseudonymizer)
+    // --------------------------------------------------
+
+    private static Instance of(TestDicom.Instance dicom, String transferSyntaxHint) {
+        return new Instance() {
+            @Override
+            public InputStream open() {
+                return new ByteArrayInputStream(dicom.bytes());
+            }
+
+            @Override
+            public String transferSyntaxHint() {
+                return transferSyntaxHint;
+            }
+        };
+    }
+
+    private static Attributes parse(TestStoreScp.Received received) throws IOException {
+        try (DicomInputStream dis = new DicomInputStream(new ByteArrayInputStream(received.data()), received.tsuid())) {
+            return dis.readDataset();
+        }
+    }
+
+    @Test
+    public void bareExplicitDataSetIsStored() throws Exception {
+        TestStoreScp scp = scp(TestStoreScp.acceptingAll("PROJ_A"));
+        TestDicom.Instance bare = TestDicom.bare(UID.ExplicitVRLittleEndian, 512);
+
+        List<Result> results = new DicomStoreBatch(config()).send(to(scp, "PROJ_A"), List.of(of(bare)));
+
+        assertEquals(Outcome.SUCCESS, results.get(0).outcome(), results.get(0).message());
+        assertEquals(bare.iuid(), results.get(0).sopInstanceUid());
+        TestStoreScp.Received received = scp.received().get(0);
+        assertEquals(UID.ExplicitVRLittleEndian, received.tsuid());
+        // The SCP gets exactly the data set, readable in the negotiated transfer syntax
+        assertEquals(bare.bytes().length, received.data().length);
+        Attributes ds = parse(received);
+        assertEquals(bare.iuid(), ds.getString(Tag.SOPInstanceUID));
+        assertEquals(512, ds.getBytes(Tag.PixelData).length);
+    }
+
+    @Test
+    public void bareDataSetIsSentInItsOwnEncodingNotTheHint() throws Exception {
+        TestStoreScp scp = scp(TestStoreScp.acceptingAll("PROJ_A"));
+        TestDicom.Instance implicit = TestDicom.bare(UID.ImplicitVRLittleEndian, 256);
+        TestDicom.Instance explicit = TestDicom.bare(UID.ExplicitVRLittleEndian, 256);
+
+        // GetScu reports the original encoding, the pseudonymizer re-encodes explicit VR
+        List<Result> results = new DicomStoreBatch(config()).send(to(scp, "PROJ_A"), List.of(
+                of(implicit, UID.ExplicitVRLittleEndian),
+                of(explicit, UID.ImplicitVRLittleEndian)));
+
+        assertTrue(results.stream().allMatch(Result::stored), results.toString());
+        assertEquals(UID.ImplicitVRLittleEndian, scp.received().get(0).tsuid());
+        assertEquals(UID.ExplicitVRLittleEndian, scp.received().get(1).tsuid());
+        assertEquals(implicit.iuid(), parse(scp.received().get(0)).getString(Tag.SOPInstanceUID));
+        assertEquals(explicit.iuid(), parse(scp.received().get(1)).getString(Tag.SOPInstanceUID));
+    }
+
+    @Test
+    public void bareCompressedDataSetUsesTheTransferSyntaxAttribute() throws Exception {
+        TestStoreScp scp = scp(TestStoreScp.acceptingAll("PROJ_A"));
+        TestDicom.Instance jpeg = TestDicom.bareEncapsulated(300);
+
+        List<Result> results = new DicomStoreBatch(config()).send(to(scp, "PROJ_A"),
+                List.of(of(jpeg, UID.JPEGBaseline8Bit)));
+
+        assertEquals(Outcome.SUCCESS, results.get(0).outcome(), results.get(0).message());
+        TestStoreScp.Received received = scp.received().get(0);
+        assertEquals(UID.JPEGBaseline8Bit, received.tsuid());
+        assertEquals(jpeg.bytes().length, received.data().length);
+        assertEquals(jpeg.iuid(), parse(received).getString(Tag.SOPInstanceUID));
+    }
+
+    @Test
+    public void bareCompressedDataSetWithoutKnownTransferSyntaxIsNotSent() throws Exception {
+        TestStoreScp scp = scp(TestStoreScp.acceptingAll("PROJ_A"));
+        TestDicom.Instance jpeg = TestDicom.bareEncapsulated(300);
+
+        List<Result> results = new DicomStoreBatch(config()).send(to(scp, "PROJ_A"), List.of(
+                of(jpeg),
+                of(jpeg, UID.ImplicitVRLittleEndian),
+                of(jpeg, " ")));
+
+        for (Result result : results) {
+            assertEquals(DicomStoreBatch.INVALID_DICOM, result.errorCode(), result.message());
+            assertTrue(result.message().contains("transfer syntax unknown"), result.message());
+        }
+        assertEquals(0, scp.received().size());
+    }
+
+    @Test
+    public void bareDataSetWithoutSopUidsIsNotSent() throws Exception {
+        TestStoreScp scp = scp(TestStoreScp.acceptingAll("PROJ_A"));
+        Attributes ds = new Attributes();
+        ds.setString(Tag.PatientID, VR.LO, "TEST");
+        ds.setString(Tag.Modality, VR.CS, "CT");
+        byte[] bytes = TestDicom.write(ds, UID.ExplicitVRLittleEndian);
+
+        Result result = new DicomStoreBatch(config()).send(to(scp, "PROJ_A"), List.of(of(bytes))).get(0);
+
+        assertEquals(DicomStoreBatch.INVALID_DICOM, result.errorCode());
+        assertTrue(result.message().contains("no SOP Class/Instance UID"), result.message());
+        assertEquals(0, scp.received().size());
+    }
+
+    /** Real flow: data set as GetScu writes it -> Pseudonymizer2 -> StoreScu. */
+    @Test
+    public void pseudonymizerOutputIsStored() throws Exception {
+        TestStoreScp scp = scp(TestStoreScp.acceptingAll("PROJ_A"));
+        String originalIuid = "1.2.826.0.1.3680043.10.999.1.1.1";
+        byte[] fromGetScu = TestDicom.write(TestDicom.ctWithPatient(originalIuid), UID.ImplicitVRLittleEndian);
+
+        java.io.ByteArrayOutputStream pseudonymized = new java.io.ByteArrayOutputStream();
+        Attributes anonym = org.rra.deidentify.GeneralAnonymizer.pseudonymize2(
+                new ByteArrayInputStream(fromGetScu), pseudonymized, null, "TEST-PSEUDO", "TEST^PSEUDO", 0);
+        byte[] bytes = pseudonymized.toByteArray();
+
+        Result result = new DicomStoreBatch(config()).send(to(scp, "PROJ_A"),
+                List.of(of(new TestDicom.Instance(anonym.getString(Tag.SOPInstanceUID), bytes),
+                        UID.ImplicitVRLittleEndian))).get(0);
+
+        assertEquals(Outcome.SUCCESS, result.outcome(), result.message());
+        Attributes received = parse(scp.received().get(0));
+        assertEquals(anonym.getString(Tag.SOPInstanceUID), received.getString(Tag.SOPInstanceUID));
+        assertFalse(originalIuid.equals(received.getString(Tag.SOPInstanceUID)));
+        assertEquals("TEST-PSEUDO", received.getString(Tag.PatientID));
+        assertEquals(64, received.getBytes(Tag.PixelData).length);
     }
 
     @Test

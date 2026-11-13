@@ -3,6 +3,7 @@ package org.rra.processors;
 import org.apache.nifi.util.MockFlowFile;
 import org.apache.nifi.util.TestRunner;
 import org.apache.nifi.util.TestRunners;
+import org.dcm4che3.data.UID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.rra.cstore.DicomStoreBatch;
@@ -169,6 +170,39 @@ public class StoreScuBatchTest {
         runner.assertAllFlowFilesTransferred(StoreScu.REL_FAILURE, 1);
         runner.getFlowFilesForRelationship(StoreScu.REL_FAILURE).get(0)
                 .assertAttributeEquals(StoreScu.STORE_ERROR_CODE, DicomStoreBatch.INVALID_DICOM);
+    }
+
+    /** Content as GetScu and Pseudonymizer2 write it: data set without file meta information. */
+    @Test
+    public void bareDataSetsFromTheFlowAreStored() throws Exception {
+        TestStoreScp scp = scp(TestStoreScp.acceptingAll("PROJ_A"));
+        TestRunner runner = runner(scp.port(), "PROJ_A");
+        TestDicom.Instance explicit = TestDicom.bare(UID.ExplicitVRLittleEndian, 256);
+        TestDicom.Instance compressed = TestDicom.bareEncapsulated(128);
+        runner.enqueue(explicit.bytes(), Map.of(StoreScu.TRANSFER_SYNTAX, UID.ImplicitVRLittleEndian));
+        runner.enqueue(compressed.bytes(), Map.of(StoreScu.TRANSFER_SYNTAX, UID.JPEGBaseline8Bit));
+
+        runner.run();
+
+        runner.assertAllFlowFilesTransferred(StoreScu.REL_SUCCESS, 2);
+        assertEquals(2, scp.received().size());
+        // Native data in its own (pseudonymized) encoding, compressed data per GetScu attribute
+        assertEquals(UID.ExplicitVRLittleEndian, scp.received().get(0).tsuid());
+        assertEquals(UID.JPEGBaseline8Bit, scp.received().get(1).tsuid());
+    }
+
+    @Test
+    public void bareCompressedDataSetWithoutTransferSyntaxAttributeFails() throws Exception {
+        TestStoreScp scp = scp(TestStoreScp.acceptingAll("PROJ_A"));
+        TestRunner runner = runner(scp.port(), "PROJ_A");
+        runner.enqueue(TestDicom.bareEncapsulated(128).bytes());
+
+        runner.run();
+
+        runner.assertAllFlowFilesTransferred(StoreScu.REL_FAILURE, 1);
+        runner.getFlowFilesForRelationship(StoreScu.REL_FAILURE).get(0)
+                .assertAttributeEquals(StoreScu.STORE_ERROR_CODE, DicomStoreBatch.INVALID_DICOM);
+        assertEquals(0, scp.received().size());
     }
 
     @Test

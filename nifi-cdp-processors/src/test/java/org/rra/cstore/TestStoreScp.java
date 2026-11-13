@@ -35,7 +35,8 @@ import java.util.concurrent.ScheduledExecutorService;
  */
 public final class TestStoreScp implements AutoCloseable {
 
-    public record Received(String calledAet, String callingAet, String iuid, String tsuid, long bytes) {}
+    /** @param data the data set as sent (without file meta information) */
+    public record Received(String calledAet, String callingAet, String iuid, String tsuid, long bytes, byte[] data) {}
 
     private final Device device = new Device("test-storescp");
     private final ApplicationEntity ae;
@@ -81,12 +82,14 @@ public final class TestStoreScp implements AutoCloseable {
                     as.abort();
                     return;
                 }
-                long bytes = data.transferTo(java.io.OutputStream.nullOutputStream());
+                java.io.ByteArrayOutputStream copy = new java.io.ByteArrayOutputStream();
+                long bytes = data.transferTo(copy);
                 Integer status = statusFor.get(iuid);
                 if (status != null) {
                     throw new DicomServiceException(status, "test error for " + iuid);
                 }
-                received.add(new Received(as.getCalledAET(), as.getCallingAET(), iuid, pc.getTransferSyntax(), bytes));
+                received.add(new Received(as.getCalledAET(), as.getCallingAET(), iuid, pc.getTransferSyntax(), bytes,
+                        copy.toByteArray()));
             }
         });
         device.setDimseRQHandler(registry);
