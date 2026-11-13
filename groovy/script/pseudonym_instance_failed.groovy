@@ -138,8 +138,8 @@ callback = session.putAllAttributes(callback, [
         "dcma.instance.error.code": errorCode
 ])
 
-log.warn("Instance failed: orderId={}, retrieveId={}, errorCode={}",
-        [orderId, retrieveId, errorCode] as Object[])
+log.warn("Instance failed: orderId={}, retrieveId={}, errorCode={}, error={}",
+        [orderId, retrieveId, errorCode, errorMessage] as Object[])
 
 session.transfer(callback, REL_SUCCESS)
 
