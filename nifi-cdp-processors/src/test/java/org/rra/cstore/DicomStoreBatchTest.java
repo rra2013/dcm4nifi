@@ -181,6 +181,9 @@ public class DicomStoreBatchTest {
             assertEquals(DicomStoreBatch.ASSOCIATION_REJECTED, result.errorCode(), result.message());
         }
         assertEquals(0, scp.received().size());
+        // Log line of StoreScu names the reason, not just the count
+        String summary = DicomStoreBatch.failureSummary(results);
+        assertTrue(summary.startsWith("ASSOCIATION_REJECTED x2 ("), summary);
     }
 
     @Test
@@ -287,6 +290,34 @@ public class DicomStoreBatchTest {
         assertEquals(2, chunks.size());
         assertEquals(128, chunks.get(0).size());
         assertEquals(3, chunks.get(1).size());
+    }
+
+    @Test
+    public void failureSummaryCountsPerErrorCodeWithFirstMessage() {
+        List<Result> results = List.of(
+                Result.stored(0x0000, null, "2.25.1"),
+                Result.failed(DicomStoreBatch.STORE_REJECTED, 0xA700, "C-STORE status A700: Out of resources", "2.25.2"),
+                Result.failed(DicomStoreBatch.STORE_REJECTED, 0xA700, "C-STORE status A700: second", "2.25.3"),
+                Result.failed(DicomStoreBatch.NO_PRESENTATION_CONTEXT, "SOP Class 1.2.3 not accepted by X", "2.25.4"),
+                Result.failed(null, null, null));
+
+        assertEquals("STORE_REJECTED x2 (C-STORE status A700: Out of resources); "
+                        + "NO_PRESENTATION_CONTEXT x1 (SOP Class 1.2.3 not accepted by X); UNKNOWN x1",
+                DicomStoreBatch.failureSummary(results));
+    }
+
+    @Test
+    public void failureSummaryIsNullWhenAllStored() {
+        assertNull(DicomStoreBatch.failureSummary(List.of(
+                Result.stored(0x0000, null, "2.25.1"), Result.stored(0xB000, "warning", "2.25.2"))));
+        assertNull(DicomStoreBatch.failureSummary(List.of()));
+    }
+
+    @Test
+    public void failureSummaryShortensLongMessages() {
+        String summary = DicomStoreBatch.failureSummary(List.of(
+                Result.failed(DicomStoreBatch.ASSOCIATION_ABORTED, "x".repeat(1000), "2.25.1")));
+        assertEquals("ASSOCIATION_ABORTED x1 (" + "x".repeat(300) + "...)", summary);
     }
 
     @Test

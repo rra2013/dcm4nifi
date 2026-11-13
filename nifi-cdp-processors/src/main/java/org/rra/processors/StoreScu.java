@@ -372,8 +372,9 @@ public class StoreScu extends AbstractProcessor {
                 }
             }
             if (stored < members.size()) {
-                log.warn("C-STORE to {}: {} of {} instances stored, {} failed",
-                        group.getKey(), stored, members.size(), members.size() - stored);
+                log.warn("C-STORE to {}: {} of {} instances stored, {} failed: {}",
+                        group.getKey(), stored, members.size(), members.size() - stored,
+                        DicomStoreBatch.failureSummary(results));
             } else {
                 log.debug("C-STORE to {}: {} instances stored", group.getKey(), stored);
             }

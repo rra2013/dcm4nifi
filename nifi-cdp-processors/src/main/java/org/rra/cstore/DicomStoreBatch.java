@@ -23,8 +23,10 @@ import java.io.InputStream;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -366,6 +368,41 @@ public final class DicomStoreBatch {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
+    }
+
+    /**
+     * Failures of a batch for the log: per error code the count and the
+     * first message, e.g. {@code ASSOCIATION_REJECTED x50 (A-ASSOCIATE-RJ ...)}.
+     * Messages are technical (AE titles, UIDs, exceptions), no patient data.
+     *
+     * @return null if every instance was stored
+     */
+    public static String failureSummary(List<Result> results) {
+        Map<String, Integer> counts = new LinkedHashMap<>();
+        Map<String, String> firstMessage = new LinkedHashMap<>();
+        for (Result result : results) {
+            if (result.stored()) {
+                continue;
+            }
+            String code = result.errorCode() == null ? "UNKNOWN" : result.errorCode();
+            counts.merge(code, 1, Integer::sum);
+            if (result.message() != null && !result.message().isBlank()) {
+                firstMessage.putIfAbsent(code, result.message());
+            }
+        }
+        if (counts.isEmpty()) {
+            return null;
+        }
+        List<String> parts = new ArrayList<>();
+        counts.forEach((code, count) -> {
+            String message = firstMessage.get(code);
+            parts.add(code + " x" + count + (message == null ? "" : " (" + abbreviate(message, 300) + ")"));
+        });
+        return String.join("; ", parts);
+    }
+
+    private static String abbreviate(String text, int max) {
+        return text.length() <= max ? text : text.substring(0, max) + "...";
     }
 
     private static String describe(Throwable e) {
