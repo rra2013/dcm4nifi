@@ -67,11 +67,22 @@ String originalSopUid = optional("dcma.original.sop.uid")
 String errorCode
 String errorMessage
 
+String storeErrorCode = optional("dicom.store.error.code")
 String maskUnsupported = optional("maskmultiframeus.unsupported.reason")
 String maskError = optional("maskmultiframeus.error")
 String pseudonymizerError = optional("pseudonymizer.error.message")
 
-if (maskUnsupported != null) {
+if (storeErrorCode != null) {
+    // StoreScu "failure" (Lieferung per DICOM C-STORE): Instanz ist
+    // pseudonymisiert, aber beim Store-SCP nicht angekommen.
+    String target = optional("dcma.delivery.aet")
+    String storeStatus = optional("dicom.store.status")
+    String storeError = optional("dicom.store.error")
+    errorCode = "STORE_FAILED"
+    errorMessage = "DICOM C-STORE" + (target ? " an " + target : "") + " fehlgeschlagen (" +
+            storeErrorCode + (storeStatus ? ", Status " + storeStatus : "") + ")" +
+            (storeError ? ": " + storeError : "")
+} else if (maskUnsupported != null) {
     // Nicht maskierbar (z. B. Single-Frame): darf nicht unmaskiert weiterlaufen.
     errorCode = "MASK_UNSUPPORTED"
     errorMessage = "Pixelmaskierung nicht anwendbar: " + maskUnsupported

@@ -129,6 +129,58 @@ try {
         String sharepointEmail = single("SHAREPOINT_EMAIL")
         String studyUid = single("STUDY_UID")
 
+        // Lieferung (dcma-order DELIVERY_*): fehlt DELIVERY_TYPE (ältere
+        // Nachricht), gilt DOWNLOAD. Werte werden geprüft, weil StoreScu sie
+        // per Expression Language als Ziel liest.
+        def optionalSingle = { String key ->
+            def values = observations[key]
+                    .collect { it?.trim() }
+                    .findAll { it }
+                    .unique()
+            if (values.size() > 1) {
+                throw new IllegalArgumentException(
+                        "Expected at most one distinct value for ${key}, " +
+                                "found ${values.size()}: ${values}"
+                )
+            }
+            values ? values[0] : null
+        }
+
+        String deliveryType = optionalSingle("DELIVERY_TYPE") ?: "DOWNLOAD"
+        def deliveryAttributes = ["dcma.delivery.type": deliveryType]
+
+        if (deliveryType == "DICOM_STORE") {
+            String deliveryAet = single("DELIVERY_AET")
+            String deliveryHost = single("DELIVERY_HOST")
+            String deliveryPort = single("DELIVERY_PORT")
+
+            if (!(deliveryAet ==~ /[A-Za-z0-9._-]{1,16}/)) {
+                throw new IllegalArgumentException("Invalid DELIVERY_AET: ${deliveryAet}")
+            }
+            if (!(deliveryHost ==~ /[A-Za-z0-9]([A-Za-z0-9.-]{0,253}[A-Za-z0-9])?/)) {
+                throw new IllegalArgumentException("Invalid DELIVERY_HOST: ${deliveryHost}")
+            }
+            if (!(deliveryPort ==~ /[0-9]{1,5}/)
+                    || (deliveryPort as int) < 1
+                    || (deliveryPort as int) > 65535) {
+                throw new IllegalArgumentException("Invalid DELIVERY_PORT: ${deliveryPort}")
+            }
+
+            deliveryAttributes += [
+                    "dcma.delivery.aet" : deliveryAet,
+                    "dcma.delivery.host": deliveryHost,
+                    "dcma.delivery.port": deliveryPort
+            ]
+        } else if (deliveryType == "DOWNLOAD") {
+            for (String key : ["DELIVERY_AET", "DELIVERY_HOST", "DELIVERY_PORT"]) {
+                if (optionalSingle(key) != null) {
+                    throw new IllegalArgumentException("${key} is not allowed for DOWNLOAD")
+                }
+            }
+        } else {
+            throw new IllegalArgumentException("Unsupported DELIVERY_TYPE: ${deliveryType}")
+        }
+
         def seriesUids = observations["SERIES_UID"]
 
         if (seriesUids.isEmpty()) {
@@ -152,7 +204,7 @@ try {
                 "dcma.sharepoint.user"  : sharepointUser,
                 "dcma.sharepoint.email" : sharepointEmail,
                 "mime.type"              : "text/csv"
-        ]
+        ] + deliveryAttributes
 
         // One FlowFile per Study/Series combination.
         for (String seriesUid : seriesUids) {
