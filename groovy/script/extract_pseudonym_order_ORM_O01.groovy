@@ -181,6 +181,31 @@ try {
             throw new IllegalArgumentException("Unsupported DELIVERY_TYPE: ${deliveryType}")
         }
 
+        // Datumsversatz (dcma-order DATE_SHIFT_DAYS, Tage): fehlt er oder ist er 0,
+        // bleibt dcma.date.shift.days ungesetzt und Pseudonymizer2 entfernt die
+        // Daten wie bisher. Der Wert kommt nicht in Fehlermeldungen oder Logs.
+        def dateShiftAttributes = [:]
+        def dateShifts = observations["DATE_SHIFT_DAYS"]
+                .collect { it?.trim() }
+                .findAll { it }
+                .unique()
+        if (dateShifts.size() > 1) {
+            throw new IllegalArgumentException("Expected at most one distinct value for DATE_SHIFT_DAYS")
+        }
+        String dateShift = dateShifts ? dateShifts[0] : null
+        if (dateShift != null) {
+            if (!(dateShift ==~ /[+-]?[0-9]{1,5}/)) {
+                throw new IllegalArgumentException("Invalid DATE_SHIFT_DAYS: not a whole number")
+            }
+            int days = Integer.parseInt(dateShift)
+            if (days < -36500 || days > 36500) {
+                throw new IllegalArgumentException("Invalid DATE_SHIFT_DAYS: outside +/-36500 days")
+            }
+            if (days != 0) {
+                dateShiftAttributes["dcma.date.shift.days"] = String.valueOf(days)
+            }
+        }
+
         def seriesUids = observations["SERIES_UID"]
 
         if (seriesUids.isEmpty()) {
@@ -204,7 +229,7 @@ try {
                 "dcma.sharepoint.user"  : sharepointUser,
                 "dcma.sharepoint.email" : sharepointEmail,
                 "mime.type"              : "text/csv"
-        ] + deliveryAttributes
+        ] + deliveryAttributes + dateShiftAttributes
 
         // One FlowFile per Study/Series combination.
         for (String seriesUid : seriesUids) {

@@ -880,6 +880,58 @@ public class PseudonymizerTest {
         );
     }
 
+    /** Wie im Flow PROCESS_ORDER: Versatz aus dcma.date.shift.days, ohne Attribut 0. */
+    @Test
+    public void testPseudonymizer2DateShiftFromOrderAttribute() {
+
+        for (String shift : new String[] {null, "-42"}) {
+            TestRunner testRunner = createPseudonymizer2Runner();
+            testRunner.setProperty(Pseudonymizer2.DATE_SHIFT, "${dcma.date.shift.days:replaceNull('0')}");
+
+            Map<String, String> attributes = new HashMap<>();
+            attributes.put("dcma.pseudonym.pid", "CAIRO-001");
+            attributes.put("dcma.pseudonym.name", "CAIRO^PATIENT");
+            if (shift != null) {
+                attributes.put("dcma.date.shift.days", shift);
+            }
+
+            byte[] input = dcmObjects.get(0);
+            String originalDate = DicomUtils.byteArrayToAttributes(input).getString(Tag.StudyDate);
+            Assertions.assertNotNull(originalDate);
+
+            testRunner.enqueue(input, attributes);
+            testRunner.run();
+            testRunner.assertAllFlowFilesTransferred(Pseudonymizer2.REL_SUCCESS, 1);
+
+            Attributes anonymized = DicomUtils.byteArrayToAttributes(
+                    testRunner.getFlowFilesForRelationship(Pseudonymizer2.REL_SUCCESS).get(0).toByteArray());
+            if (shift == null) {
+                Assertions.assertNull(anonymized.getString(Tag.StudyDate));
+                Assertions.assertEquals("REMOVED", anonymized.getString(Tag.LongitudinalTemporalInformationModified));
+            } else {
+                java.time.format.DateTimeFormatter da = java.time.format.DateTimeFormatter.BASIC_ISO_DATE;
+                Assertions.assertEquals(java.time.LocalDate.parse(originalDate, da).minusDays(42).format(da),
+                        anonymized.getString(Tag.StudyDate));
+                Assertions.assertEquals("MODIFIED", anonymized.getString(Tag.LongitudinalTemporalInformationModified));
+            }
+        }
+    }
+
+    @Test
+    public void testPseudonymizer2DateShiftOutOfRangeFails() {
+
+        TestRunner testRunner = createPseudonymizer2Runner();
+        testRunner.setProperty(Pseudonymizer2.DATE_SHIFT, "${dcma.date.shift.days:replaceNull('0')}");
+
+        testRunner.enqueue(dcmObjects.get(0), Map.of(
+                "dcma.pseudonym.pid", "CAIRO-001",
+                "dcma.pseudonym.name", "CAIRO^PATIENT",
+                "dcma.date.shift.days", "36501"));
+        testRunner.run();
+
+        testRunner.assertAllFlowFilesTransferred(Pseudonymizer2.REL_FAILURE, 1);
+    }
+
     @Test
     public void testPseudonymizer2RetainTags() {
 

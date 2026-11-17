@@ -27,8 +27,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Lieferung per DICOM C-STORE (dcma-order DELIVERY_*):
- * extract_pseudonym_order_ORM_O01.groovy setzt dcma.delivery.*,
+ * Lieferung per DICOM C-STORE (dcma-order DELIVERY_*) und Datumsversatz
+ * (DATE_SHIFT_DAYS): extract_pseudonym_order_ORM_O01.groovy setzt
+ * dcma.delivery.* und dcma.date.shift.days,
  * pseudonym_instance_failed.groovy meldet StoreScu-Fehler als STORE_FAILED.
  */
 @DisabledOnOs(OS.WINDOWS)
@@ -122,6 +123,52 @@ public class TestGroovyDelivery {
 
             runner.assertTransferCount(ExecuteGroovyScript.REL_SUCCESS, 0);
             runner.assertTransferCount(ExecuteGroovyScript.REL_FAILURE, 1);
+        }
+    }
+
+    @Test
+    public void dateShiftIsSetOnEverySeries() throws Exception {
+        Map<String, String> values = delivery("DOWNLOAD", null, null, null);
+        values.put("DATE_SHIFT_DAYS", "-42");
+        TestRunner runner = runner("extract_pseudonym_order_ORM_O01.groovy");
+        runner.enqueue(orm(values));
+        runner.run();
+
+        runner.assertTransferCount(ExecuteGroovyScript.REL_FAILURE, 0);
+        List<MockFlowFile> series = runner.getFlowFilesForRelationship(ExecuteGroovyScript.REL_SUCCESS);
+        assertEquals(3, series.size());
+        series.forEach(flowFile -> flowFile.assertAttributeEquals("dcma.date.shift.days", "-42"));
+    }
+
+    @Test
+    public void noOrZeroDateShiftSetsNoAttribute() throws Exception {
+        for (String shift : new String[] {null, "0"}) {
+            Map<String, String> values = delivery("DOWNLOAD", null, null, null);
+            if (shift != null) values.put("DATE_SHIFT_DAYS", shift);
+            TestRunner runner = runner("extract_pseudonym_order_ORM_O01.groovy");
+            runner.enqueue(orm(values));
+            runner.run();
+
+            List<MockFlowFile> series = runner.getFlowFilesForRelationship(ExecuteGroovyScript.REL_SUCCESS);
+            assertEquals(3, series.size());
+            series.forEach(flowFile -> flowFile.assertAttributeNotExists("dcma.date.shift.days"));
+        }
+    }
+
+    @Test
+    public void invalidDateShiftFailsTheWholeMessageWithoutShowingIt() throws Exception {
+        for (String shift : new String[] {"abc", "1.5", "36501", "-99999", "${dcma.order.id}"}) {
+            Map<String, String> values = delivery("DOWNLOAD", null, null, null);
+            values.put("DATE_SHIFT_DAYS", shift);
+            TestRunner runner = runner("extract_pseudonym_order_ORM_O01.groovy");
+            runner.enqueue(orm(values));
+            runner.run();
+
+            runner.assertTransferCount(ExecuteGroovyScript.REL_SUCCESS, 0);
+            runner.assertTransferCount(ExecuteGroovyScript.REL_FAILURE, 1);
+            String error = runner.getFlowFilesForRelationship(ExecuteGroovyScript.REL_FAILURE).get(0)
+                    .getAttribute("ERROR_MESSAGE");
+            assertFalse(error != null && error.contains(shift), error);
         }
     }
 
