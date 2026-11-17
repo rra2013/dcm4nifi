@@ -714,6 +714,7 @@ public class DcmDeIdentifier {
             Tag.DeviceUID,
     };
     private static final String UNMODIFIED = "UNMODIFIED";
+    private static final String MODIFIED = "MODIFIED";
     private static final String REMOVED = "REMOVED";
     private static final String YES = "YES";
     private static final ElementDictionary dict = ElementDictionary.getStandardElementDictionary();
@@ -737,7 +738,14 @@ public class DcmDeIdentifier {
             z = cat(z, Z_INSTITUTION);
             d = cat(d, D_INSTITUTION);
         }
-        if (!this.options.contains(Option.RetainLongitudinalTemporalInformationFullDatesOption)) {
+        if (this.options.contains(Option.RetainLongitudinalTemporalInformationModifiedDatesOption)) {
+            // Dates and times stay so that DateShifter can shift them; everything else
+            // in the date lists (e.g. TimezoneOffsetFromUTC, DeviceLabel) is still removed.
+            // Birth date is shifted as well, so the age at the examination stays correct.
+            x = without(cat(x, nonTemporal(X_DATES)), Tag.PatientAge);
+            z = without(cat(z, nonTemporal(Z_DATES)), Tag.PatientBirthDate);
+            d = cat(d, nonTemporal(D_DATES));
+        } else if (!this.options.contains(Option.RetainLongitudinalTemporalInformationFullDatesOption)) {
             x = cat(x, X_DATES);
             z = cat(z, Z_DATES);
             d = cat(d, D_DATES);
@@ -761,6 +769,30 @@ public class DcmDeIdentifier {
         System.arraycopy(a, 0, dest, 0, a.length);
         System.arraycopy(b, 0, dest, a.length, b.length);
         return dest;
+    }
+
+    /** Tags of the list that are not DA, DT or TM. */
+    private static int[] nonTemporal(int[] tags) {
+        return Arrays.stream(tags).filter(tag -> {
+            VR vr = dict.vrOf(tag);
+            return vr != VR.DA && vr != VR.DT && vr != VR.TM;
+        }).toArray();
+    }
+
+    private static int[] without(int[] tags, int tag) {
+        return Arrays.stream(tags).filter(t -> t != tag).toArray();
+    }
+
+    private boolean retainsDates() {
+        return options.contains(Option.RetainLongitudinalTemporalInformationFullDatesOption)
+                || options.contains(Option.RetainLongitudinalTemporalInformationModifiedDatesOption);
+    }
+
+    private String longitudinalTemporalInformation() {
+        if (options.contains(Option.RetainLongitudinalTemporalInformationModifiedDatesOption)) {
+            return MODIFIED;
+        }
+        return options.contains(Option.RetainLongitudinalTemporalInformationFullDatesOption) ? UNMODIFIED : REMOVED;
     }
 
     private static String dummyValueFor(VR vr) {
@@ -800,8 +832,7 @@ public class DcmDeIdentifier {
         correct(attrs);
         if (pid != null) attrs.setString(Tag.PatientID, VR.LO, hash(pid));
         attrs.setString(Tag.PatientIdentityRemoved, VR.CS, YES);
-        attrs.setString(Tag.LongitudinalTemporalInformationModified, VR.CS,
-                options.contains(Option.RetainLongitudinalTemporalInformationFullDatesOption) ? UNMODIFIED : REMOVED);
+        attrs.setString(Tag.LongitudinalTemporalInformationModified, VR.CS, longitudinalTemporalInformation());
         Sequence sq = attrs.ensureSequence(Tag.DeidentificationMethodCodeSequence, options.size());
         List<String> allMeanings = new ArrayList<>();
         for (Option option : options) {
@@ -844,7 +875,7 @@ public class DcmDeIdentifier {
     }
 
     private void correct(Attributes attrs) {
-        if (!options.contains(Option.RetainLongitudinalTemporalInformationFullDatesOption)
+        if (!retainsDates()
                 && UID.PositronEmissionTomographyImageStorage.equals(attrs.getString(Tag.SOPClassUID))) {
             attrs.setString(Tag.SeriesDate, VR.DA, dummyValues.getString(Tag.SeriesDate));
             attrs.setString(Tag.SeriesTime, VR.TM, dummyValues.getString(Tag.SeriesTime));
@@ -926,8 +957,8 @@ public class DcmDeIdentifier {
 //        CleanDescriptorsOption(DeIdentificationMethod.CleanDescriptorsOption),
         RetainLongitudinalTemporalInformationFullDatesOption(
                 DeIdentificationMethod.RetainLongitudinalTemporalInformationFullDatesOption),
-        //        RetainLongitudinalTemporalInformationModifiedDatesOption(
-//                DeIdentificationMethod.RetainLongitudinalTemporalInformationModifiedDatesOption),
+        RetainLongitudinalTemporalInformationModifiedDatesOption(
+                DeIdentificationMethod.RetainLongitudinalTemporalInformationModifiedDatesOption),
 //        RetainPatientCharacteristicsOption(DeIdentificationMethod.RetainPatientCharacteristicsOption),
         RetainDeviceIdentityOption(DeIdentificationMethod.RetainDeviceIdentityOption),
         RetainInstitutionIdentityOption(DeIdentificationMethod.RetainInstitutionIdentityOption),

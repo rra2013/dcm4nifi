@@ -21,6 +21,7 @@ import org.apache.nifi.processor.util.StandardValidators;
 import org.dcm4che3.data.Attributes;
 import org.dcm4che3.data.Tag;
 import org.rra.deidentify.GeneralAnonymizer;
+import org.rra.deidentify.DateShifter;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -65,7 +66,11 @@ public class Pseudonymizer2 extends AbstractProcessor {
     public static final PropertyDescriptor DATE_SHIFT = new PropertyDescriptor.Builder()
             .name("date-shift")
             .displayName("Date shift")
-            .description("Date shift applied by GeneralAnonymizer (units defined by that implementation).")
+            .description("Date shift in days (supports FlowFile Expression Language), e.g. "
+                    + "${dcma.date.shift.days:replaceNull('0')}. 0 removes the dates as before. "
+                    + "Any other value (at most +/-36500) keeps the dates and shifts every DA and DT value, "
+                    + "also in sequences, by that number of days; times are not changed and the object is "
+                    + "marked with code 113107 (Retain Longitudinal Temporal Information Modified Dates Option).")
             .required(false)
             .defaultValue("0")
             .expressionLanguageSupported(ExpressionLanguageScope.FLOWFILE_ATTRIBUTES)
@@ -134,7 +139,7 @@ public class Pseudonymizer2 extends AbstractProcessor {
             routeFailure(session, flowFile, "Missing pseudonym PID or name");
             return;
         }
-        if (dateShift == null) {
+        if (dateShift == null || Math.abs(dateShift) > DateShifter.MAX_DAYS) {
             routeFailure(session, flowFile, "Invalid date shift");
             return;
         }
