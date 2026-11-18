@@ -1,9 +1,25 @@
 import ca.uhn.hl7v2.DefaultHapiContext
+import ca.uhn.hl7v2.model.Primitive
 import ca.uhn.hl7v2.model.v25.message.ORM_O01
+import ca.uhn.hl7v2.parser.EncodingCharacters
+import ca.uhn.hl7v2.parser.Escape
 import ca.uhn.hl7v2.parser.PipeParser
 import org.apache.nifi.processor.io.OutputStreamCallback
 
 import java.nio.charset.StandardCharsets
+
+/**
+ * OBX-5 als Klartext. Der Parser löst die HL7-Escapes (\S\ \T\ \R\ \E\ \F\)
+ * bereits auf; encode() würde sie wieder einsetzen, aus "CAIRO^001" würde
+ * "CAIRO\S\001" und so im DICOM-PatientName landen.
+ */
+String obxValue(obx) {
+    def data = obx.getObservationValue(0).getData()
+    if (data instanceof Primitive) {
+        return ((Primitive) data).getValue()
+    }
+    return Escape.unescape(data.encode(), new EncodingCharacters('|' as char, '^~\\&'))
+}
 
 def flowFile = session.get()
 if (flowFile == null) {
@@ -95,10 +111,7 @@ try {
                             .getIdentifier()
                             .getValue()
 
-            String value =
-                    obx.getObservationValue(0)
-                            .getData()
-                            .encode()
+            String value = obxValue(obx)
 
             observations[code] << value
         }
