@@ -35,11 +35,11 @@ public class DcmDeIdentifier {
             Tag.CurrentObserverTrial,
             Tag.CurrentPatientLocation,
             Tag.CustodialOrganizationSequence,
-//            Tag.Date, // Content Item Attribute
-            Tag.DateTime, // Content Item Attribute
+//            Tag.Date, // Content Item Attribute: D (D_DATES)
+//            Tag.DateTime, // Content Item Attribute: D (D_DATES)
             Tag.DataSetTrailingPadding,
             Tag.DerivationDescription,
-            Tag.DigitalSignatureUID,
+//            Tag.DigitalSignatureUID, // U
             Tag.DigitalSignaturesSequence,
             Tag.DischargeDiagnosisCodeSequence,
             Tag.DischargeDiagnosisDescription,
@@ -344,13 +344,15 @@ public class DcmDeIdentifier {
             Tag.NamesOfIntendedRecipientsOfResults,
             Tag.DocumentingObserverIdentifierCodeSequenceTrial,
             Tag.EntityDescription,
+            // Deliberate deviation from PS3.15 (action D): these sequences are
+            // removed. Their items carry free text that Table E.1-1 does not list
+            // (e.g. Unformatted Text Value in Graphic Annotation Sequence), so
+            // de-identifying item by item would keep names and dates.
             Tag.ContentSequence,
             Tag.PersonIdentificationCodeSequence,
             Tag.VerifyingObserverSequence,
             Tag.GraphicAnnotationSequence,
-            Tag.FlowIdentifierSequence,
-            Tag.PrescriptionNotesSequence
-
+            Tag.FlowIdentifierSequence
     };
     private static final int[] X_INSTITUTION = {
             Tag.InstitutionAddress,
@@ -477,6 +479,7 @@ public class DcmDeIdentifier {
     };
     private static final int[] Z = {
             Tag.AccessionNumber,
+            Tag.PrescriptionNotesSequence,
             Tag.ConsultingPhysicianName,
             Tag.ContentCreatorName,
             Tag.FillerOrderNumberImagingServiceRequest,
@@ -806,8 +809,6 @@ public class DcmDeIdentifier {
                 return "111111";
             case IS:
                 return "0";
-            case OB:
-                return "";
             case DS:
                 return "0";
             case US:
@@ -816,6 +817,12 @@ public class DcmDeIdentifier {
                 return "0";
             case UL:
                 return "0";
+            case OB:
+            case OD:
+            case OF:
+            case OL:
+            case OV:
+            case OW:
             case UN:
                 return null;
             case PN:
@@ -866,8 +873,10 @@ public class DcmDeIdentifier {
             log.debug("Set Dummy Value For Tag:{}, VR:{}, newVR:{}, Dummy:{}", dict.keywordOf(tag), dict.vrOf(tag), vr, dummy);
             dummyValues.setString(tag, vr, dummy);
         } else {
-            if (vr == VR.UN){
-                dummyValues.setBytes(tag, vr,  new byte[]{0});
+            if (vr == VR.OB || vr == VR.OD || vr == VR.OF || vr == VR.OL
+                    || vr == VR.OV || vr == VR.OW || vr == VR.UN) {
+                // 8 zero bytes: even length and a whole number of values for every binary VR
+                dummyValues.setBytes(tag, vr, new byte[8]);
             }else{
                 log.info("No Dummy Value For Tag:{}, VR:{}, newVR:{}, Dummy:'{}'", dict.keywordOf(tag), dict.vrOf(tag), vr, dummy);
             }
