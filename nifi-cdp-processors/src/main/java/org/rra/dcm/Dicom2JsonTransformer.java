@@ -59,7 +59,12 @@ public class Dicom2JsonTransformer {
             Attributes dcm = data.getAttributes();
             dcm.removePrivateAttributes();
             Attributes fmi = data.getFmi();
-            if (null == fmi) {
+            // createFileMetaInformation() throws IllegalArgumentException if
+            // SOPInstanceUID or SOPClassUID is missing. The FMI is only needed for
+            // the internal round trip, so write the dataset without FMI in that case.
+            if (null == fmi
+                    && dcm.containsValue(Tag.SOPInstanceUID)
+                    && dcm.containsValue(Tag.SOPClassUID)) {
                 fmi = dcm.createFileMetaInformation(UID.ExplicitVRLittleEndian);
             }
             try (DicomOutputStream dos = new DicomOutputStream(out, UID.ExplicitVRLittleEndian)) {
