@@ -184,12 +184,40 @@ try {
                     "dcma.delivery.host": deliveryHost,
                     "dcma.delivery.port": deliveryPort
             ]
+            for (String key : ["DELIVERY_DIRECTORY", "DELIVERY_FOLDER"]) {
+                if (optionalSingle(key) != null) {
+                    throw new IllegalArgumentException("${key} is not allowed for DICOM_STORE")
+                }
+            }
         } else if (deliveryType == "DOWNLOAD") {
-            for (String key : ["DELIVERY_AET", "DELIVERY_HOST", "DELIVERY_PORT"]) {
+            for (String key : ["DELIVERY_AET", "DELIVERY_HOST", "DELIVERY_PORT",
+                               "DELIVERY_DIRECTORY", "DELIVERY_FOLDER"]) {
                 if (optionalSingle(key) != null) {
                     throw new IllegalArgumentException("${key} is not allowed for DOWNLOAD")
                 }
             }
+        } else if (deliveryType == "DIRECTORY") {
+            // Externer Datenträger: nur Namen (Mount-Point und Ordner der Kohorte),
+            // das Wurzelverzeichnis (/mnt) ist ein NiFi-Parameter. Geschrieben wird in
+            // PERSIST_ORDER_FILES (write_external_drive_zip.groovy) nach dem Ziel aus
+            // dcma-order (zip-target); die Attribute hier dienen Anzeige und Routing.
+            for (String key : ["DELIVERY_AET", "DELIVERY_HOST", "DELIVERY_PORT"]) {
+                if (optionalSingle(key) != null) {
+                    throw new IllegalArgumentException("${key} is not allowed for DIRECTORY")
+                }
+            }
+            String directory = single("DELIVERY_DIRECTORY")
+            String folder = single("DELIVERY_FOLDER")
+            if (!(directory ==~ /[A-Za-z0-9][A-Za-z0-9._-]{0,63}/) || directory.contains("..")) {
+                throw new IllegalArgumentException("Invalid DELIVERY_DIRECTORY: ${directory}")
+            }
+            if (!(folder ==~ /[A-Za-z0-9]([A-Za-z0-9._-]{0,98}[A-Za-z0-9_-])?/) || folder.contains("..")) {
+                throw new IllegalArgumentException("Invalid DELIVERY_FOLDER: ${folder}")
+            }
+            deliveryAttributes += [
+                    "dcma.delivery.directory": directory,
+                    "dcma.delivery.folder"   : folder
+            ]
         } else {
             throw new IllegalArgumentException("Unsupported DELIVERY_TYPE: ${deliveryType}")
         }

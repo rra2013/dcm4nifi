@@ -27,7 +27,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Lieferung per DICOM C-STORE (dcma-order DELIVERY_*) und Datumsversatz
+ * Lieferung per DICOM C-STORE oder auf einen externen Datenträger (dcma-order
+ * DELIVERY_*) und Datumsversatz
  * (DATE_SHIFT_DAYS): extract_pseudonym_order_ORM_O01.groovy setzt
  * dcma.delivery.* und dcma.date.shift.days,
  * pseudonym_instance_failed.groovy meldet StoreScu-Fehler als STORE_FAILED.
@@ -117,6 +118,73 @@ public class TestGroovyDelivery {
                 delivery("NAS", null, null, null));
 
         for (Map<String, String> values : invalid) {
+            TestRunner runner = runner("extract_pseudonym_order_ORM_O01.groovy");
+            runner.enqueue(orm(values));
+            runner.run();
+
+            runner.assertTransferCount(ExecuteGroovyScript.REL_SUCCESS, 0);
+            runner.assertTransferCount(ExecuteGroovyScript.REL_FAILURE, 1);
+        }
+    }
+
+    @Test
+    public void externalDriveIsSetOnEverySeries() throws Exception {
+        Map<String, String> values = new LinkedHashMap<>();
+        values.put("DELIVERY_TYPE", "DIRECTORY");
+        values.put("DELIVERY_DIRECTORY", "DLF090902343424");
+        values.put("DELIVERY_FOLDER", "Kohorte_Lunge");
+        TestRunner runner = runner("extract_pseudonym_order_ORM_O01.groovy");
+        runner.enqueue(orm(values));
+        runner.run();
+
+        runner.assertTransferCount(ExecuteGroovyScript.REL_FAILURE, 0);
+        List<MockFlowFile> series = runner.getFlowFilesForRelationship(ExecuteGroovyScript.REL_SUCCESS);
+        assertEquals(3, series.size());
+        for (MockFlowFile flowFile : series) {
+            flowFile.assertAttributeEquals("dcma.delivery.type", "DIRECTORY");
+            flowFile.assertAttributeEquals("dcma.delivery.directory", "DLF090902343424");
+            flowFile.assertAttributeEquals("dcma.delivery.folder", "Kohorte_Lunge");
+            flowFile.assertAttributeNotExists("dcma.delivery.aet");
+            flowFile.assertAttributeNotExists("dcma.delivery.host");
+        }
+    }
+
+    @Test
+    public void invalidExternalDriveFailsTheWholeMessage() throws Exception {
+        String[][] invalid = {
+                {"..", "Kohorte"}, {"../etc", "Kohorte"}, {"/mnt", "Kohorte"}, {"a/b", "Kohorte"},
+                {".hidden", "Kohorte"}, {"a..b", "Kohorte"}, {"USB1", ".."}, {"USB1", "a/b"},
+                {"USB1", "a\\b"}, {"USB1", "Kohorte."}, {"USB1", "${dcma.order.id}"}, {null, "Kohorte"},
+                {"USB1", null}};
+        for (String[] target : invalid) {
+            Map<String, String> values = new LinkedHashMap<>();
+            values.put("DELIVERY_TYPE", "DIRECTORY");
+            if (target[0] != null) values.put("DELIVERY_DIRECTORY", target[0]);
+            if (target[1] != null) values.put("DELIVERY_FOLDER", target[1]);
+            TestRunner runner = runner("extract_pseudonym_order_ORM_O01.groovy");
+            runner.enqueue(orm(values));
+            runner.run();
+
+            runner.assertTransferCount(ExecuteGroovyScript.REL_SUCCESS, 0);
+            runner.assertTransferCount(ExecuteGroovyScript.REL_FAILURE, 1);
+        }
+    }
+
+    @Test
+    public void externalDriveFieldsAreOnlyAllowedForDirectory() throws Exception {
+        Map<String, String> withStore = new LinkedHashMap<>();
+        withStore.put("DELIVERY_TYPE", "DIRECTORY");
+        withStore.put("DELIVERY_DIRECTORY", "USB1");
+        withStore.put("DELIVERY_FOLDER", "Kohorte");
+        withStore.put("DELIVERY_AET", "CAIRO_HPC");
+
+        Map<String, String> download = delivery("DOWNLOAD", null, null, null);
+        download.put("DELIVERY_DIRECTORY", "USB1");
+
+        Map<String, String> store = delivery("DICOM_STORE", "CAIRO_HPC", "hpc.insel.ch", "11112");
+        store.put("DELIVERY_FOLDER", "Kohorte");
+
+        for (Map<String, String> values : List.of(withStore, download, store)) {
             TestRunner runner = runner("extract_pseudonym_order_ORM_O01.groovy");
             runner.enqueue(orm(values));
             runner.run();
