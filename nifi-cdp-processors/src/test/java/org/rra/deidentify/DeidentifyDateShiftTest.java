@@ -69,12 +69,13 @@ public class DeidentifyDateShiftTest {
         Assertions.assertEquals("20191121", out.getString(Tag.InstanceCreationDate));
         Assertions.assertEquals("20191120", out.getString(Tag.ContentDate));
         Assertions.assertEquals("20191120101530.25+0100", out.getString(Tag.AcquisitionDateTime));
-        Assertions.assertEquals("19700504", out.getString(Tag.PatientBirthDate));
+        // PS3.15: birth date Z, age X, also with Modified Dates
+        Assertions.assertNull(out.getString(Tag.PatientBirthDate));
+        Assertions.assertFalse(out.contains(Tag.PatientAge));
         Assertions.assertEquals("20191124080000", out.getSequence(Tag.PerFrameFunctionalGroupsSequence).get(0)
                 .getSequence(Tag.FrameContentSequence).get(0).getString(Tag.FrameAcquisitionDateTime));
-        // times and age stay
+        // times stay
         Assertions.assertEquals("101500", out.getString(Tag.StudyTime));
-        Assertions.assertEquals("049Y", out.getString(Tag.PatientAge));
         // not dates: still removed or replaced
         Assertions.assertFalse(out.contains(Tag.TimezoneOffsetFromUTC));
         Assertions.assertNotEquals("Scanner 3", out.getString(Tag.DeviceLabel));
@@ -106,6 +107,13 @@ public class DeidentifyDateShiftTest {
     public void retainedDatesAreShiftedToo() {
         Attributes out = new Deidentify().deidentifyAttributes(sample(), "StudyDate", "PS-1", "PS^1", SHIFT);
         Assertions.assertEquals("20191120", out.getString(Tag.StudyDate));
+    }
+
+    @Test
+    public void ageIsKeptOnlyWhenRetained() {
+        Attributes out = new Deidentify().deidentifyAttributes(sample(), "PatientAge", "PS-1", "PS^1", SHIFT);
+        Assertions.assertEquals("049Y", out.getString(Tag.PatientAge));
+        Assertions.assertNull(out.getString(Tag.PatientBirthDate));
     }
 
     @Test

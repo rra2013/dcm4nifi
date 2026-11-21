@@ -15,8 +15,9 @@ import java.util.*;
  *
  * <p>Date shift 0 or {@code null}: dates are removed or replaced by dummy values
  * as before. Date shift &ne; 0 (days, at most {@link DateShifter#MAX_DAYS}): dates
- * and times are kept, every DA and DT value, also in sequences, the birth date and
- * retained tags, is shifted by that number of days, times stay unchanged, and the
+ * and times are kept, every DA and DT value, also in sequences and retained tags,
+ * is shifted by that number of days, times stay unchanged, birth date and age are
+ * removed as in the Basic Profile (unless retained), and the
  * data set is marked with LongitudinalTemporalInformationModified = MODIFIED and
  * code 113107 (Retain Longitudinal Temporal Information Modified Dates Option).</p>
  */

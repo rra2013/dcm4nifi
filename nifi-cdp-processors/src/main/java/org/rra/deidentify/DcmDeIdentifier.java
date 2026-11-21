@@ -744,9 +744,11 @@ public class DcmDeIdentifier {
         if (this.options.contains(Option.RetainLongitudinalTemporalInformationModifiedDatesOption)) {
             // Dates and times stay so that DateShifter can shift them; everything else
             // in the date lists (e.g. TimezoneOffsetFromUTC, DeviceLabel) is still removed.
-            // Birth date is shifted as well, so the age at the examination stays correct.
-            x = without(cat(x, nonTemporal(X_DATES)), Tag.PatientAge);
-            z = without(cat(z, nonTemporal(Z_DATES)), Tag.PatientBirthDate);
+            // PS3.15 Table E.1-1 keeps neither the birth date (Z) nor the age (X) with
+            // this option; the age is kept only with Retain Patient Characteristics
+            // (in DCMA: profile MIDDLE/LIGHT via the retained tags).
+            x = cat(x, nonTemporal(X_DATES));
+            z = cat(cat(z, nonTemporal(Z_DATES)), new int[]{Tag.PatientBirthDate});
             d = cat(d, nonTemporal(D_DATES));
         } else if (!this.options.contains(Option.RetainLongitudinalTemporalInformationFullDatesOption)) {
             x = cat(x, X_DATES);
@@ -780,10 +782,6 @@ public class DcmDeIdentifier {
             VR vr = dict.vrOf(tag);
             return vr != VR.DA && vr != VR.DT && vr != VR.TM;
         }).toArray();
-    }
-
-    private static int[] without(int[] tags, int tag) {
-        return Arrays.stream(tags).filter(t -> t != tag).toArray();
     }
 
     private boolean retainsDates() {
